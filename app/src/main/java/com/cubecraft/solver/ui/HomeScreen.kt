@@ -29,7 +29,7 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
                 Text("OFFLINE · CAMERA SOLVER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
-            Text("0.5.1", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text("0.5.2", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(Modifier.height(28.dp))
@@ -67,7 +67,7 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
         Spacer(Modifier.height(16.dp))
         PrimaryActionCard(
             title = "Scan a real cube",
-            body = "Guided camera grid. Auto-detection when possible, manual capture when it isn't.",
+            body = "Guided camera grid. Confirm every captured face before moving to the next one.",
             action = "START 6-FACE SCAN",
             onClick = { onScan(selected) }
         )

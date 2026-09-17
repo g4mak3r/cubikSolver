@@ -10,7 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class AppScreen { HOME, SCAN, REVIEW, STUDIO }
+enum class AppScreen { HOME, SCAN, FACE_CONFIRM, REVIEW, STUDIO }
 
 class CubecraftViewModel : ViewModel() {
     var screen by mutableStateOf(AppScreen.HOME); private set
@@ -22,6 +22,7 @@ class CubecraftViewModel : ViewModel() {
     var scanQuality by mutableFloatStateOf(0f); private set
     var frontCenterGuess by mutableStateOf<StickerGuess?>(null); private set
     var frontCenterRgb by mutableStateOf<RgbColor?>(null); private set
+    var pendingFaceObservation by mutableStateOf<FaceObservation?>(null); private set
     var reviewFaces by mutableStateOf<Map<Face,List<Face>>?>(null); private set
     var validation by mutableStateOf<ValidationReport?>(null); private set
     var message by mutableStateOf<String?>(null); private set
@@ -53,7 +54,11 @@ class CubecraftViewModel : ViewModel() {
     val moveHistory: List<Move> get() = history.toList()
     val hasBaseline: Boolean get() = baseline != null
 
-    fun home() { screen = AppScreen.HOME; message = null }
+    fun home() {
+        pendingFaceObservation = null
+        screen = AppScreen.HOME
+        message = null
+    }
 
     fun openVirtual(size: Int) {
         cubeSize = size
@@ -61,6 +66,7 @@ class CubecraftViewModel : ViewModel() {
         revision++
         palette = emptyMap()
         baseline = null
+        pendingFaceObservation = null
         originSolved = true
         history.clear()
         redo.clear()
@@ -76,6 +82,7 @@ class CubecraftViewModel : ViewModel() {
         scanQuality = 0f
         frontCenterGuess = null
         frontCenterRgb = null
+        pendingFaceObservation = null
         reviewFaces = null
         validation = null
         validationRequestId++
@@ -86,21 +93,49 @@ class CubecraftViewModel : ViewModel() {
 
     fun updateScanQuality(q: Float) { scanQuality = q }
 
+    /**
+     * Capture never advances directly anymore. Every face first stops on a confirmation screen
+     * showing exactly what the camera sampled. Only confirmCurrentFace() commits the face and moves on.
+     */
     fun captureFace(observation: FaceObservation) {
         if (observation.samples.size != cubeSize * cubeSize) return
+        if (screen != AppScreen.SCAN) return
+        pendingFaceObservation = observation
+        scanQuality = observation.quality
+        message = null
+        screen = AppScreen.FACE_CONFIRM
+    }
+
+    fun confirmCurrentFace() {
+        val observation = pendingFaceObservation ?: return
+        if (observation.samples.size != cubeSize * cubeSize) return
+        val pose = currentPose
+
         if (scanIndex == 0) {
             val center = cubeSize * cubeSize / 2
             frontCenterGuess = observation.stickers.getOrNull(center)?.guess
             frontCenterRgb = observation.samples.getOrNull(center)?.rgb
         }
-        captures.removeAll { it.face == currentPose.face }
-        captures += CapturedFace(currentPose.face, observation.samples, observation.quality)
+
+        captures.removeAll { it.face == pose.face }
+        captures += CapturedFace(pose.face, observation.samples, observation.quality)
+        pendingFaceObservation = null
+        scanQuality = 0f
+
         if (scanIndex < 5) {
             scanIndex++
-            scanQuality = 0f
+            screen = AppScreen.SCAN
         } else {
             finishClassification()
         }
+    }
+
+    /** Throw away only the just-captured frame and return to the same face. */
+    fun rescanCurrentFace() {
+        pendingFaceObservation = null
+        scanQuality = 0f
+        message = null
+        screen = AppScreen.SCAN
     }
 
     fun restartScan() { beginScan(cubeSize) }
@@ -121,12 +156,10 @@ class CubecraftViewModel : ViewModel() {
                 classified = BalancedClassifier.classifyNearest(captures, cubeSize)
                 usedFallback = true
             } catch (fallbackError: Throwable) {
-                // Keep the user on FACE 6 so only the last face has to be recaptured.
-                // Do not call restartScan(): that used to erase the error and create an endless
-                // six-face loop that looked as if the app had no post-scan flow at all.
                 scanIndex = 5
                 scanQuality = 0f
                 message = "Could not finalize the scan: ${fallbackError.message ?: balancedError.message ?: "unknown error"}. Recapture the last face."
+                screen = AppScreen.SCAN
                 return
             }
         }
@@ -190,10 +223,6 @@ class CubecraftViewModel : ViewModel() {
         }
     }
 
-    /**
-     * A valid 3x3 scan flows directly into analysis. The 3D screen opens immediately and the
-     * solver runs off the UI thread; when it finishes the timeline/slider appears automatically.
-     */
     fun acceptReview() {
         val report = validation ?: return
         if (!report.ok) {

@@ -33,6 +33,16 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                     vm.cubeSize, vm.currentPose, vm.scanIndex,
                     vm::updateScanQuality, vm::captureFace, vm::home
                 )
+                AppScreen.FACE_CONFIRM -> vm.pendingFaceObservation?.let { observation ->
+                    FaceConfirmScreen(
+                        size = vm.cubeSize,
+                        pose = vm.currentPose,
+                        index = vm.scanIndex,
+                        observation = observation,
+                        onRescan = vm::rescanCurrentFace,
+                        onConfirm = vm::confirmCurrentFace
+                    )
+                }
                 AppScreen.REVIEW -> vm.reviewFaces?.let { faces ->
                     ReviewScreen(
                         vm.cubeSize, faces, vm.palette, vm.validation, vm.message,
