@@ -3,12 +3,24 @@ package com.cubecraft.solver
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cubecraft.solver.solver.Min2PhaseSolver
 import com.cubecraft.solver.ui.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
+    // min2phase builds pruning tables once. Doing that in the background at app start hides most
+    // first-solve latency behind the time the user spends scanning and reviewing the cube.
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.Default) {
+            runCatching { Min2PhaseSolver.warmUp() }
+        }
+    }
+
     val colors = lightColorScheme(
         background = AppBg,
         onBackground = Ink,
