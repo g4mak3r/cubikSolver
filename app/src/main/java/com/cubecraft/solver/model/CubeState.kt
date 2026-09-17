@@ -118,13 +118,22 @@ class CubeState(val size: Int) {
         stickers.putAll(out)
     }
 
-    fun toMin2PhaseString(): String {
-        require(size == 3) { "min2phase serialization expects a 3x3 cube" }
-        return buildString(54) {
+    /**
+     * Serialize any supported cube in standard URFDLB face order, each face row-major.
+     * 3x3 -> 54 chars, 5x5 -> 150 chars. This is the stable bridge format for external solvers.
+     */
+    fun toUrfdlbString(): String {
+        val chars = 6 * size * size
+        return buildString(chars) {
             listOf(Face.U, Face.R, Face.F, Face.D, Face.L, Face.B).forEach { face ->
                 faceColors(face).forEach { append(it.symbol) }
             }
         }
+    }
+
+    fun toMin2PhaseString(): String {
+        require(size == 3) { "min2phase serialization expects a 3x3 cube" }
+        return toUrfdlbString()
     }
 
     /** Odd-cube fixed centers, corners and middle edge pieces form a legal 3x3 skeleton. */
