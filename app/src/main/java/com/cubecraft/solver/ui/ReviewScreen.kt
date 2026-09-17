@@ -139,13 +139,13 @@ private fun FaceEditScreen(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 FaceGrid(
-                    size = size,
-                    colors = colors,
+                    gridSize = size,
+                    values = colors,
                     palette = palette,
                     modifier = Modifier
                         .fillMaxWidth(if (size == 3) .82f else .90f)
                         .aspectRatio(1f),
-                    onCell = onCell
+                    onTap = onCell
                 )
             }
         }
@@ -258,11 +258,11 @@ private fun NetFace(
         contentAlignment = Alignment.Center
     ) {
         FaceGrid(
-            size = size,
-            colors = faces.getValue(face),
+            gridSize = size,
+            values = faces.getValue(face),
             palette = palette,
             modifier = Modifier.fillMaxSize(),
-            onCell = { onFace(face) }
+            onTap = { onFace(face) }
         )
         Text(
             face.symbol.toString(),
