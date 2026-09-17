@@ -6,7 +6,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="CUBECRAFT"
+        android:label="cubikSolver"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cubecraft">
         <activity
