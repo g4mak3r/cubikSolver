@@ -29,7 +29,7 @@ fun StudioScreen(
     var turns by remember { mutableIntStateOf(1) }
     var editMode by remember { mutableStateOf(false) }
     var paintColor by remember { mutableStateOf(Face.F) }
-    val scanned3x3 = canReturnToScan && size == 3
+    val guidedScan = canReturnToScan && (size == 3 || size == 5)
 
     Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 14.dp)) {
         Spacer(Modifier.height(8.dp))
@@ -40,7 +40,7 @@ fun StudioScreen(
             Column(Modifier.padding(start = 5.dp)) {
                 Text("cubikSolver", color = Ink, fontWeight = FontWeight.Black, fontSize = 18.sp, letterSpacing = .4.sp)
                 Text(
-                    if (scanned3x3) "3 × 3 · GUIDED SOLVE" else "$size × $size · DIGITAL TWIN",
+                    if (guidedScan) "$size × $size · GUIDED SOLVE" else "$size × $size · DIGITAL TWIN",
                     color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold
                 )
             }
@@ -98,7 +98,7 @@ fun StudioScreen(
             }
             solving -> {
                 Spacer(Modifier.height(8.dp))
-                AnalyzingCard()
+                AnalyzingCard(size)
             }
             solution.isNotEmpty() -> {
                 Spacer(Modifier.height(8.dp))
@@ -124,7 +124,7 @@ fun StudioScreen(
 
         Spacer(Modifier.height(7.dp))
 
-        if (scanned3x3) {
+        if (guidedScan) {
             SolverActions(
                 solving = solving,
                 hasSolution = solution.isNotEmpty(),
@@ -152,7 +152,7 @@ fun StudioScreen(
             )
         }
 
-        if (!scanned3x3 && history.isNotEmpty()) {
+        if (!guidedScan && history.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(history.takeLast(12).joinToString(" ") { it.notation() }, color = Muted, fontSize = 9.sp, maxLines = 1)
         }
@@ -161,14 +161,20 @@ fun StudioScreen(
 }
 
 @Composable
-private fun AnalyzingCard() {
+private fun AnalyzingCard(size: Int) {
     Surface(color = AccentSoft, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, Accent.copy(alpha=.22f))) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("ANALYZING 3×3", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                Text("Searching for a short verified sequence…", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("ANALYZING ${size}×${size}", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                Text(
+                    if (size == 5) "Reducing centers and edges, then solving the 3×3 skeleton…"
+                    else "Searching for a short verified sequence…",
+                    color = Ink,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -219,7 +225,8 @@ private fun SolutionTimelineCard(
                 value = index.toFloat().coerceIn(0f, sliderMax),
                 onValueChange = { onSeek(it.roundToInt()) },
                 valueRange = 0f..sliderMax,
-                steps = (total - 1).coerceAtLeast(0)
+                // Hundreds of 5x5 steps do not need hundreds of painted tick marks.
+                steps = if (total <= 80) (total - 1).coerceAtLeast(0) else 0
             )
             Row(Modifier.fillMaxWidth()) {
                 Text("START", color = Muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -364,7 +371,11 @@ private fun moveInstruction(m: Move): String {
         Face.F -> "FRONT"
         Face.B -> "BACK"
     }
-    val layer = if (m.width > 1) "two layers" else "face"
+    val layer = when (m.width) {
+        1 -> "face"
+        2 -> "two layers together"
+        else -> "${m.width} layers together"
+    }
     val direction = when (m.quarterTurns) {
         1 -> "clockwise ↻"
         2 -> "180°"
