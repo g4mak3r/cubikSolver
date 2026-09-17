@@ -8,18 +8,29 @@ import com.cubecraft.solver.model.Face
  * per logical color instead of allowing nearest-neighbour drift under difficult illumination.
  */
 object BalancedClassifier {
-    private data class Item(val capturedFace: Face, val cell: Int, val sample: ColorSample, val isCenter: Boolean)
+    private data class Item(
+        val capturedFace: Face,
+        val cell: Int,
+        val sample: ColorSample,
+        val isCenter: Boolean,
+        val manualGuess: StickerGuess?
+    )
 
     fun classify(captures: List<CapturedFace>, size: Int): ClassifiedScan {
         val byFace = validatedCaptures(captures, size)
         val center = size * size / 2
         val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
         val palette = refs.mapValues { it.value.rgb }
+        val faceByRealColor = uniqueCenterColorMap(byFace, size)
 
         val items = buildList {
             for (face in Face.entries) {
-                val samples = byFace.getValue(face).rotatedSamples(size)
-                samples.forEachIndexed { idx, s -> add(Item(face, idx, s, idx == center)) }
+                val capture = byFace.getValue(face)
+                val samples = capture.rotatedSamples(size)
+                val overrides = capture.rotatedManualGuesses(size)
+                samples.forEachIndexed { idx, s ->
+                    add(Item(face, idx, s, idx == center, overrides[idx]))
+                }
             }
         }
         val targets = buildList { Face.entries.forEach { f -> repeat(size * size) { add(f) } } }
@@ -27,8 +38,12 @@ object BalancedClassifier {
         val costs = Array(n) { i -> DoubleArray(n) { j ->
             val item = items[i]
             val target = targets[j]
-            if (item.isCenter && target != item.capturedFace) 100_000.0
-            else cubeColorDistance(item.sample, refs.getValue(target))
+            val forcedFace = item.manualGuess?.let(faceByRealColor::get)
+            when {
+                item.isCenter && target != item.capturedFace -> 1_000_000.0
+                forcedFace != null && target != forcedFace -> 1_000_000.0
+                else -> cubeColorDistance(item.sample, refs.getValue(target))
+            }
         } }
         val assignment = hungarian(costs)
         val perFace = Face.entries.associateWith { face -> MutableList(size * size) { face } }
@@ -52,15 +67,20 @@ object BalancedClassifier {
         val center = size * size / 2
         val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
         val palette = refs.mapValues { it.value.rgb }
+        val faceByRealColor = uniqueCenterColorMap(byFace, size)
         var sum = 0.0
         var count = 0
 
         val perFace = Face.entries.associateWith { capturedFace ->
-            byFace.getValue(capturedFace).rotatedSamples(size).mapIndexed { idx, sample ->
-                val chosen = if (idx == center) {
-                    capturedFace
-                } else {
-                    Face.entries.minBy { target -> cubeColorDistance(sample, refs.getValue(target)) }
+            val capture = byFace.getValue(capturedFace)
+            val samples = capture.rotatedSamples(size)
+            val overrides = capture.rotatedManualGuesses(size)
+            samples.mapIndexed { idx, sample ->
+                val forcedFace = overrides[idx]?.let(faceByRealColor::get)
+                val chosen = when {
+                    idx == center -> capturedFace
+                    forcedFace != null -> forcedFace
+                    else -> Face.entries.minBy { target -> cubeColorDistance(sample, refs.getValue(target)) }
                 }
                 sum += cubeColorDistance(sample, refs.getValue(chosen))
                 count++
@@ -68,6 +88,28 @@ object BalancedClassifier {
             }
         }
         return ClassifiedScan(perFace, palette, if (count == 0) 0.0 else sum / count)
+    }
+
+    /**
+     * The scan sequence names faces by orientation (F/R/B/L/U/D), not by physical color.
+     * Manual edits are made with real color labels (W/Y/R/O/G/B), so after all six faces exist we
+     * map each unique center label back to its logical face identity. Ambiguous/unknown center
+     * labels simply disable hard forcing for that color instead of making classification crash.
+     */
+    private fun uniqueCenterColorMap(
+        byFace: Map<Face, CapturedFace>,
+        size: Int
+    ): Map<StickerGuess, Face> {
+        val center = size * size / 2
+        val centerColors = Face.entries.associateWith { face ->
+            byFace.getValue(face).rotatedGuesses(size).getOrElse(center) { StickerGuess.UNKNOWN }
+        }
+        val counts = centerColors.values.groupingBy { it }.eachCount()
+        return centerColors.entries
+            .filter { (face, guess) ->
+                face in Face.entries && guess != StickerGuess.UNKNOWN && counts[guess] == 1
+            }
+            .associate { (face, guess) -> guess to face }
     }
 
     private fun validatedCaptures(captures: List<CapturedFace>, size: Int): Map<Face, CapturedFace> {
