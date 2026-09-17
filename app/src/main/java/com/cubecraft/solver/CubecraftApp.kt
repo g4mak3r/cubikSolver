@@ -61,9 +61,16 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                 }
                 AppScreen.REVIEW -> vm.reviewFaces?.let { faces ->
                     ReviewScreen(
-                        vm.cubeSize, faces, vm.palette, vm.validation, vm.message,
-                        vm::rotateReviewFace, vm::cycleReviewSticker, vm::acceptReview,
-                        vm::restartScan, vm::home
+                        size = vm.cubeSize,
+                        faces = faces,
+                        palette = vm.palette,
+                        report = vm.validation,
+                        message = vm.message,
+                        onRotate = vm::rotateReviewFace,
+                        onSetColor = vm::setReviewStickerColor,
+                        onAccept = vm::acceptReview,
+                        onRescan = vm::restartScan,
+                        onBack = vm::home
                     )
                 }
                 AppScreen.STUDIO -> StudioScreen(
