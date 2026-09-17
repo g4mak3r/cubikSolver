@@ -146,15 +146,14 @@ class CubecraftViewModel : ViewModel() {
      * nearest-colour fallback so the scan can be inspected and repaired manually.
      */
     private fun finishClassification() {
-        val classified: ClassifiedScan
         var usedFallback = false
 
-        try {
-            classified = BalancedClassifier.classify(captures, cubeSize)
+        val classified = try {
+            BalancedClassifier.classify(captures, cubeSize)
         } catch (balancedError: Throwable) {
+            usedFallback = true
             try {
-                classified = BalancedClassifier.classifyNearest(captures, cubeSize)
-                usedFallback = true
+                BalancedClassifier.classifyNearest(captures, cubeSize)
             } catch (fallbackError: Throwable) {
                 scanIndex = 5
                 scanQuality = 0f
