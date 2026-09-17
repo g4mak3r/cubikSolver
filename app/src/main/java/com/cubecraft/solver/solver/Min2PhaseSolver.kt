@@ -7,10 +7,13 @@ import cs.min2phase.Search
 /**
  * 3x3 solver backed by Chen Shuang's min2phase implementation.
  *
- * IMPORTANT: validation and solving are deliberately separate.
- * Search.verify(facelets) is the library's native physical-state validator and does not build the
- * pruning/search tables. Review screens must use that instead of trying to solve the cube merely
- * to decide whether it is legal.
+ * Validation and solving are deliberately separate. Search.verify(facelets) is the library's
+ * native physical-state validator and does not build the pruning/search tables.
+ *
+ * The UI wants a good solution quickly, not a near-optimal solution after a long refinement pass.
+ * probeMin=0 therefore returns as soon as min2phase finds a valid short solution. The pruning
+ * tables are also warmed in the background when the app starts so first-solve latency is normally
+ * paid while the user is scanning the cube rather than after pressing OPEN 3D CUBE.
  */
 class Min2PhaseSolver : CubeSolver {
     private data class SearchConfig(
@@ -18,6 +21,21 @@ class Min2PhaseSolver : CubeSolver {
         val probeMax: Long,
         val probeMin: Long
     )
+
+    companion object {
+        private val initLock = Any()
+        @Volatile private var tablesReady = false
+
+        /** Safe to call repeatedly and from a background thread. */
+        fun warmUp() {
+            if (tablesReady) return
+            synchronized(initLock) {
+                if (tablesReady) return
+                Search.init()
+                tablesReady = true
+            }
+        }
+    }
 
     override fun solve(state: CubeState): SolverResult {
         if (state.size != 3) return SolverResult.Invalid("Two-phase solver expects 3x3")
@@ -27,9 +45,21 @@ class Min2PhaseSolver : CubeSolver {
         val verifyCode = verifyFacelets(facelets)
         if (verifyCode != 0) return SolverResult.Invalid(errorMeaning(verifyCode))
 
+        // If app-start prewarming is still running, wait for the same one-time init here.
+        // Subsequent solves skip this immediately.
+        try {
+            warmUp()
+        } catch (t: Throwable) {
+            return SolverResult.Invalid("Solver initialization failed: ${t.message ?: t.javaClass.simpleName}")
+        }
+
+        // probeMin used to be 120,000, deliberately forcing the engine to keep searching after it
+        // had already found a solution. That produced slightly shorter sequences but could cost tens
+        // of seconds on the Kirin 710A. We now return the first good <=21 move solution immediately.
         val configs = listOf(
-            SearchConfig(maxDepth = 21, probeMax = 2_000_000L, probeMin = 120_000L),
-            SearchConfig(maxDepth = 24, probeMax = 12_000_000L, probeMin = 0L)
+            SearchConfig(maxDepth = 21, probeMax = 100_000L, probeMin = 0L),
+            // Reliability fallback for unusually difficult states. Still return on first solution.
+            SearchConfig(maxDepth = 24, probeMax = 1_000_000L, probeMin = 0L)
         )
 
         var lastError = "Error 8"
@@ -68,10 +98,7 @@ class Min2PhaseSolver : CubeSolver {
         return SolverResult.Invalid(errorMeaning(lastError))
     }
 
-    /**
-     * Native min2phase validation only. This is intentionally NOT implemented through solve().
-     * The library returns 0 for a legal cube and negative error codes for invalid facelets.
-     */
+    /** Native min2phase validation only. This intentionally does not call solve(). */
     fun validate(state: CubeState): String? {
         if (state.size != 3) return "Two-phase validator expects 3x3"
         val code = try {
