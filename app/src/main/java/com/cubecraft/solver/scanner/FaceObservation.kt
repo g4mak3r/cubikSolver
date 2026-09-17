@@ -35,6 +35,10 @@ data class CapturedFace(
     val face: Face,
     val samples: List<ColorSample>,
     val quality: Float,
+    /** Raw per-cell camera guesses, retained so manual edits can be expressed in real color names. */
+    val guesses: List<StickerGuess> = emptyList(),
+    /** Explicit user corrections made on the per-face confirmation screen. */
+    val manualGuesses: Map<Int, StickerGuess> = emptyMap(),
     val rotationQuarterTurns: Int = 0
 ) {
     fun rotatedSamples(size: Int): List<ColorSample> {
@@ -45,6 +49,36 @@ data class CapturedFace(
                 val r = idx / size; val c = idx % size
                 src[(size - 1 - c) * size + r]
             }
+        }
+        return out
+    }
+
+    fun rotatedGuesses(size: Int): List<StickerGuess> {
+        var out = List(size * size) { idx ->
+            manualGuesses[idx] ?: guesses.getOrElse(idx) { StickerGuess.UNKNOWN }
+        }
+        repeat((rotationQuarterTurns % 4 + 4) % 4) {
+            val src = out
+            out = List(size * size) { idx ->
+                val r = idx / size; val c = idx % size
+                src[(size - 1 - c) * size + r]
+            }
+        }
+        return out
+    }
+
+    fun rotatedManualGuesses(size: Int): Map<Int, StickerGuess> {
+        var out = manualGuesses
+        repeat((rotationQuarterTurns % 4 + 4) % 4) {
+            val next = mutableMapOf<Int, StickerGuess>()
+            out.forEach { (idx, guess) ->
+                val r = idx / size
+                val c = idx % size
+                val nr = c
+                val nc = size - 1 - r
+                next[nr * size + nc] = guess
+            }
+            out = next
         }
         return out
     }
