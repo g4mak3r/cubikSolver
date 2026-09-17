@@ -46,7 +46,7 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                     vm.solution, vm.solutionIndex, vm.currentGuideMove, vm.solving,
                     vm.message, vm.hasBaseline, vm::home, vm::applyMove, vm::undo,
                     vm::redo, vm::returnToScan, vm::resetSolved, vm::solve,
-                    vm::solutionNext, vm::solutionPrevious
+                    vm::solutionNext, vm::solutionPrevious, vm::paintSticker
                 )
             }
         }
