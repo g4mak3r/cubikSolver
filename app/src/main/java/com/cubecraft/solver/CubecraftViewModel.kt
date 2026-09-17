@@ -23,6 +23,7 @@ class CubecraftViewModel : ViewModel() {
     var frontCenterGuess by mutableStateOf<StickerGuess?>(null); private set
     var frontCenterRgb by mutableStateOf<RgbColor?>(null); private set
     var pendingFaceObservation by mutableStateOf<FaceObservation?>(null); private set
+    var pendingFaceOverrides by mutableStateOf<Map<Int,StickerGuess>>(emptyMap()); private set
     var reviewFaces by mutableStateOf<Map<Face,List<Face>>?>(null); private set
     var validation by mutableStateOf<ValidationReport?>(null); private set
     var message by mutableStateOf<String?>(null); private set
@@ -56,6 +57,7 @@ class CubecraftViewModel : ViewModel() {
 
     fun home() {
         pendingFaceObservation = null
+        pendingFaceOverrides = emptyMap()
         screen = AppScreen.HOME
         message = null
     }
@@ -67,6 +69,7 @@ class CubecraftViewModel : ViewModel() {
         palette = emptyMap()
         baseline = null
         pendingFaceObservation = null
+        pendingFaceOverrides = emptyMap()
         originSolved = true
         history.clear()
         redo.clear()
@@ -83,6 +86,7 @@ class CubecraftViewModel : ViewModel() {
         frontCenterGuess = null
         frontCenterRgb = null
         pendingFaceObservation = null
+        pendingFaceOverrides = emptyMap()
         reviewFaces = null
         validation = null
         validationRequestId++
@@ -101,38 +105,68 @@ class CubecraftViewModel : ViewModel() {
         if (observation.samples.size != cubeSize * cubeSize) return
         if (screen != AppScreen.SCAN) return
         pendingFaceObservation = observation
+        pendingFaceOverrides = emptyMap()
         scanQuality = observation.quality
         message = null
         screen = AppScreen.FACE_CONFIRM
+    }
+
+    fun setPendingFaceColor(index: Int, guess: StickerGuess) {
+        if (screen != AppScreen.FACE_CONFIRM) return
+        if (guess == StickerGuess.UNKNOWN) return
+        if (index !in 0 until cubeSize * cubeSize) return
+        pendingFaceOverrides = pendingFaceOverrides.toMutableMap().apply { put(index, guess) }
+    }
+
+    fun clearPendingFaceColor(index: Int) {
+        if (index !in pendingFaceOverrides) return
+        pendingFaceOverrides = pendingFaceOverrides.toMutableMap().apply { remove(index) }
     }
 
     fun confirmCurrentFace() {
         val observation = pendingFaceObservation ?: return
         if (observation.samples.size != cubeSize * cubeSize) return
         val pose = currentPose
+        val center = cubeSize * cubeSize / 2
+        val rawGuesses = List(cubeSize * cubeSize) { idx ->
+            observation.stickers.getOrNull(idx)?.guess ?: StickerGuess.UNKNOWN
+        }
+        val effectiveCenterGuess = pendingFaceOverrides[center] ?: rawGuesses[center]
 
         if (scanIndex == 0) {
-            val center = cubeSize * cubeSize / 2
-            frontCenterGuess = observation.stickers.getOrNull(center)?.guess
+            frontCenterGuess = effectiveCenterGuess
             frontCenterRgb = observation.samples.getOrNull(center)?.rgb
         }
 
         captures.removeAll { it.face == pose.face }
-        captures += CapturedFace(pose.face, observation.samples, observation.quality)
-        pendingFaceObservation = null
+        captures += CapturedFace(
+            face = pose.face,
+            samples = observation.samples,
+            quality = observation.quality,
+            guesses = rawGuesses,
+            manualGuesses = pendingFaceOverrides
+        )
         scanQuality = 0f
 
         if (scanIndex < 5) {
+            pendingFaceObservation = null
+            pendingFaceOverrides = emptyMap()
             scanIndex++
             screen = AppScreen.SCAN
         } else {
-            finishClassification()
+            // Keep the sixth observation alive until finalization succeeds. If anything goes wrong,
+            // the user remains on its confirmation screen and can edit/rescan instead of crashing.
+            if (finishClassification()) {
+                pendingFaceObservation = null
+                pendingFaceOverrides = emptyMap()
+            }
         }
     }
 
     /** Throw away only the just-captured frame and return to the same face. */
     fun rescanCurrentFace() {
         pendingFaceObservation = null
+        pendingFaceOverrides = emptyMap()
         scanQuality = 0f
         message = null
         screen = AppScreen.SCAN
@@ -141,11 +175,10 @@ class CubecraftViewModel : ViewModel() {
     fun restartScan() { beginScan(cubeSize) }
 
     /**
-     * Face six is a hard transition point. We must never silently throw the user back to face one.
-     * Balanced classification is preferred; if it fails we still open Review with a center-calibrated
-     * nearest-colour fallback so the scan can be inspected and repaired manually.
+     * Face six is a hard transition point. Every operation here is guarded: malformed classifier
+     * output or cube construction must stay recoverable in the UI instead of terminating Android.
      */
-    private fun finishClassification() {
+    private fun finishClassification(): Boolean {
         var usedFallback = false
 
         val classified = try {
@@ -155,17 +188,26 @@ class CubecraftViewModel : ViewModel() {
             try {
                 BalancedClassifier.classifyNearest(captures, cubeSize)
             } catch (fallbackError: Throwable) {
-                scanIndex = 5
-                scanQuality = 0f
-                message = "Could not finalize the scan: ${fallbackError.message ?: balancedError.message ?: "unknown error"}. Recapture the last face."
-                screen = AppScreen.SCAN
-                return
+                message = "Could not classify the cube: ${fallbackError.message ?: balancedError.message ?: "unknown error"}. Edit or rescan this face."
+                screen = AppScreen.FACE_CONFIRM
+                return false
             }
+        }
+
+        val builtCube = try {
+            require(Face.entries.all { classified.faces[it]?.size == cubeSize * cubeSize }) {
+                "Classifier returned an incomplete cube"
+            }
+            CubeState(cubeSize).also { it.loadFaces(classified.faces) }
+        } catch (t: Throwable) {
+            message = "Could not build the cube: ${t.message ?: t.javaClass.simpleName}. Edit or rescan this face."
+            screen = AppScreen.FACE_CONFIRM
+            return false
         }
 
         reviewFaces = classified.faces
         palette = classified.palette
-        cube = CubeState(cubeSize).also { it.loadFaces(classified.faces) }
+        cube = builtCube
         revision++
         validation = null
         message = if (usedFallback) {
@@ -175,6 +217,7 @@ class CubecraftViewModel : ViewModel() {
         }
         screen = AppScreen.REVIEW
         validateReviewAsync()
+        return true
     }
 
     fun rotateReviewFace(face: Face) {
@@ -203,19 +246,36 @@ class CubecraftViewModel : ViewModel() {
 
     private fun refreshReviewValidation() {
         reviewFaces?.let {
-            cube = CubeState(cubeSize).also { c -> c.loadFaces(it) }
-            revision++
-            validation = null
-            message = "Validating edited scan…"
-            validateReviewAsync()
+            try {
+                cube = CubeState(cubeSize).also { c -> c.loadFaces(it) }
+                revision++
+                validation = null
+                message = "Validating edited scan…"
+                validateReviewAsync()
+            } catch (t: Throwable) {
+                validation = ValidationReport(false, listOf("Could not rebuild edited cube: ${t.message ?: t.javaClass.simpleName}"))
+                message = "The edited cube state is incomplete."
+            }
         }
     }
 
     private fun validateReviewAsync() {
-        val state = cube.deepCopy()
+        val state = try {
+            cube.deepCopy()
+        } catch (t: Throwable) {
+            validation = ValidationReport(false, listOf("Could not copy cube for validation: ${t.message ?: t.javaClass.simpleName}"))
+            message = "Cube validation could not start."
+            return
+        }
         val requestId = ++validationRequestId
         viewModelScope.launch {
-            val report = withContext(Dispatchers.Default) { validator.validate(state) }
+            val report = withContext(Dispatchers.Default) {
+                try {
+                    validator.validate(state)
+                } catch (t: Throwable) {
+                    ValidationReport(false, listOf("Validation error: ${t.message ?: t.javaClass.simpleName}"))
+                }
+            }
             if (requestId != validationRequestId) return@launch
             validation = report
             message = if (report.ok) "Scan state verified." else "Check the scan before continuing."
@@ -228,14 +288,19 @@ class CubecraftViewModel : ViewModel() {
             message = "Fix the highlighted scan/orientation problem first."
             return
         }
-        baseline = cube.snapshot()
-        originSolved = false
-        history.clear()
-        redo.clear()
-        clearSolution()
-        screen = AppScreen.STUDIO
-        message = if (cubeSize == 3) "Analyzing a short verified 3x3 solution…" else null
-        if (cubeSize == 3) solve()
+        try {
+            baseline = cube.snapshot()
+            originSolved = false
+            history.clear()
+            redo.clear()
+            clearSolution()
+            screen = AppScreen.STUDIO
+            message = if (cubeSize == 3) "Analyzing a short verified 3x3 solution…" else null
+            if (cubeSize == 3) solve()
+        } catch (t: Throwable) {
+            screen = AppScreen.REVIEW
+            message = "Could not open the 3D cube: ${t.message ?: t.javaClass.simpleName}"
+        }
     }
 
     fun applyMove(move: Move) {
@@ -313,7 +378,12 @@ class CubecraftViewModel : ViewModel() {
     fun solve() {
         if (solving) return
 
-        val state = cube.deepCopy()
+        val state = try {
+            cube.deepCopy()
+        } catch (t: Throwable) {
+            message = "Could not copy cube for solving: ${t.message ?: t.javaClass.simpleName}"
+            return
+        }
         val start = state.snapshot()
         val h = history.toList()
         val wasSolvedOrigin = originSolved
@@ -327,8 +397,12 @@ class CubecraftViewModel : ViewModel() {
 
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
-                if (state.size == 3) three.solve(state)
-                else if (wasSolvedOrigin) five.solveKnownHistory(state, h) else five.solve(state)
+                try {
+                    if (state.size == 3) three.solve(state)
+                    else if (wasSolvedOrigin) five.solveKnownHistory(state, h) else five.solve(state)
+                } catch (t: Throwable) {
+                    SolverResult.Invalid("Solver error: ${t.message ?: t.javaClass.simpleName}")
+                }
             }
 
             if (requestId != solveRequestId) return@launch
