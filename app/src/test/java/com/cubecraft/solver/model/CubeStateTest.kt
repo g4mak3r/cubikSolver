@@ -24,6 +24,32 @@ class CubeStateTest {
         val c=CubeState(5); c.applyAll(Move.parseAlgorithm("Rw U F2 Lw' D R B2")); assertTrue(c.colorCounts().values.all{it==25})
     }
 
+    @Test fun urfdlbSerializationHasStableLengthsAndSolvedOrder(){
+        val three = CubeState(3).toUrfdlbString()
+        val five = CubeState(5).toUrfdlbString()
+
+        assertEquals(54, three.length)
+        assertEquals(150, five.length)
+        assertEquals("U".repeat(9) + "R".repeat(9) + "F".repeat(9) + "D".repeat(9) + "L".repeat(9) + "B".repeat(9), three)
+        assertEquals("U".repeat(25) + "R".repeat(25) + "F".repeat(25) + "D".repeat(25) + "L".repeat(25) + "B".repeat(25), five)
+    }
+
+    @Test fun fiveByFiveUrfdlbSerializationTracksLegalMoves(){
+        val cube = CubeState(5)
+        val before = cube.toUrfdlbString()
+        cube.applyAll(Move.parseAlgorithm("Rw U F2 Lw' D R B2"))
+        val scrambled = cube.toUrfdlbString()
+
+        assertEquals(150, scrambled.length)
+        assertNotEquals(before, scrambled)
+        assertEquals(25, scrambled.count { it == 'U' })
+        assertEquals(25, scrambled.count { it == 'R' })
+        assertEquals(25, scrambled.count { it == 'F' })
+        assertEquals(25, scrambled.count { it == 'D' })
+        assertEquals(25, scrambled.count { it == 'L' })
+        assertEquals(25, scrambled.count { it == 'B' })
+    }
+
     @Test fun deepCopyPreservesArbitraryScannedState(){
         val faces = mapOf(
             Face.U to listOf(Face.U,Face.R,Face.B, Face.F,Face.U,Face.D, Face.L,Face.B,Face.R),
