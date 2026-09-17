@@ -39,6 +39,10 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                         pose = vm.currentPose,
                         index = vm.scanIndex,
                         observation = observation,
+                        overrides = vm.pendingFaceOverrides,
+                        message = vm.message,
+                        onSetColor = vm::setPendingFaceColor,
+                        onClearColor = vm::clearPendingFaceColor,
                         onRescan = vm::rescanCurrentFace,
                         onConfirm = vm::confirmCurrentFace
                     )
