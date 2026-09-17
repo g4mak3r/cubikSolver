@@ -23,6 +23,12 @@ class FiveByFiveSolver(
 ) : CubeSolver {
     enum class Phase { CENTERS, EDGE_PAIRING, PARITY, REDUCED_3X3, VERIFY }
 
+    private data class ReductionChoice(
+        val state: CubeState,
+        val moves: List<Move>,
+        val diagnostic: String
+    )
+
     override fun solve(state: CubeState): SolverResult {
         if (state.size != 5) return SolverResult.Invalid("5x5 solver expects 5x5")
         if (state.isUniformSolved()) return SolverResult.Success(emptyList())
@@ -30,29 +36,16 @@ class FiveByFiveSolver(
         validateBasicState(state)?.let { return SolverResult.Invalid(it) }
 
         val original = state.deepCopy()
-        val work = state.deepCopy()
+        var work = state.deepCopy()
         val allMoves = ArrayList<Move>()
 
         // A parity repair can unpair an edge. Reduction is therefore allowed to rebuild a few times
         // before the final outer-turn solve.
         for (pass in 0 until 4) {
-            val reduction = try {
-                FiveByFiveMacroReduction.solve(
-                    state = work,
-                    budgetMillis = if (pass == 0) 25_000L else 15_000L
-                )
-            } catch (t: Throwable) {
-                return SolverResult.Invalid("5x5 reduction failed: ${t.message ?: t.javaClass.simpleName}")
-            }
+            val reduction = reduceWithRestarts(work, pass)
+                ?: return SolverResult.Unavailable(lastReductionFailure)
 
-            if (!reduction.centresSolved || !reduction.edgesPaired) {
-                return SolverResult.Unavailable(
-                    "5x5 reduction could not finish this state: ${reduction.diagnostic}. " +
-                        "No unverified moves were returned."
-                )
-            }
-
-            work.applyAll(reduction.moves)
+            work = reduction.state
             allMoves += reduction.moves
 
             val projected = try {
@@ -102,6 +95,85 @@ class FiveByFiveSolver(
         }
 
         return SolverResult.Unavailable("5x5 solver exhausted its reduction/parity passes.")
+    }
+
+    private var lastReductionFailure: String = "5x5 reduction did not converge."
+
+    /**
+     * The reducer is a local staged search and some legal states sit on awkward plateaus. Retry the
+     * exact same sticker state after a handful of short legal perturbations instead of returning a
+     * partial/unverified sequence. Each prefix becomes part of the final candidate, so every path
+     * is still replay-verified against the original 150 stickers before it can escape this class.
+     */
+    private fun reduceWithRestarts(state: CubeState, pass: Int): ReductionChoice? {
+        val prefixes = reductionPrefixes(pass)
+        var bestDiagnostic = ""
+
+        for ((index, prefix) in prefixes.withIndex()) {
+            val candidate = state.deepCopy()
+            candidate.applyAll(prefix)
+
+            val reduction = try {
+                FiveByFiveMacroReduction.solve(
+                    state = candidate,
+                    budgetMillis = when {
+                        index == 0 && pass == 0 -> 25_000L
+                        index == 0 -> 14_000L
+                        else -> 8_000L
+                    }
+                )
+            } catch (t: Throwable) {
+                bestDiagnostic = "5x5 reduction failed: ${t.message ?: t.javaClass.simpleName}"
+                continue
+            }
+
+            bestDiagnostic = reduction.diagnostic
+            if (!reduction.centresSolved || !reduction.edgesPaired) continue
+
+            candidate.applyAll(reduction.moves)
+            return ReductionChoice(
+                state = candidate,
+                moves = prefix + reduction.moves,
+                diagnostic = reduction.diagnostic
+            )
+        }
+
+        lastReductionFailure =
+            "5x5 reduction could not finish this state after ${prefixes.size} verified search basins: " +
+                "$bestDiagnostic. No unverified moves were returned."
+        return null
+    }
+
+    private fun reductionPrefixes(pass: Int): List<List<Move>> {
+        val rw = Move(Face.R, 2, 1)
+        val rwi = rw.inverse()
+        val uw = Move(Face.U, 2, 1)
+        val uwi = uw.inverse()
+        val fw = Move(Face.F, 2, 1)
+        val fwi = fw.inverse()
+
+        return if (pass == 0) {
+            listOf(
+                emptyList(),
+                listOf(rw),
+                listOf(uw),
+                listOf(fw),
+                listOf(rwi),
+                listOf(uwi),
+                listOf(fwi),
+                listOf(rw, uw),
+                listOf(uw, fw)
+            )
+        } else {
+            listOf(
+                emptyList(),
+                listOf(rw),
+                listOf(uw),
+                listOf(fw),
+                listOf(rw, fw),
+                listOf(uw, rwi)
+            )
+        }
     }
 
     /**
