@@ -31,13 +31,27 @@ data class RgbColor(val r: Int, val g: Int, val b: Int) {
         }
         if (hue < 0.0) hue += 360.0
         val sum = (rr + gg + bb).coerceAtLeast(1e-9)
+        val rn = rr / sum
+        val gn = gg / sum
+        val bn = bb / sum
+        val redOrangeAxis = gn - bn
+
+        // Speed-cube oranges can be almost pure red in HSV. A photographed flame orange such as
+        // #FF2100 has H≈7.8°, which used to fall into our RED bucket. The useful distinction is
+        // that orange carries clearly more green than blue, while the cube's red is neutral/cool
+        // on that axis. Nudge only this tiny near-zero warm-red region away from the red boundary.
+        if (hue < 11.0 && rn > .62 && redOrangeAxis > .035) {
+            hue = 12.0 + ((redOrangeAxis - .035) * 42.0).coerceIn(0.0, 7.0)
+        }
+
         return ColorFeatures(
             hue = hue,
             saturation = saturation,
             value = mx,
-            rn = rr / sum,
-            gn = gg / sum,
-            bn = bb / sum
+            rn = rn,
+            gn = gn,
+            bn = bn,
+            redOrangeAxis = redOrangeAxis
         )
     }
 }
@@ -48,7 +62,9 @@ data class ColorFeatures(
     val value: Double,
     val rn: Double,
     val gn: Double,
-    val bn: Double
+    val bn: Double,
+    /** Illumination-resistant discriminator: positive = warmer/oranger, negative = cooler/redder. */
+    val redOrangeAxis: Double
 )
 
 data class ColorSample(val lab: LabColor, val rgb: RgbColor)
@@ -65,6 +81,9 @@ fun circularHueDistance(a: Double, b: Double): Double {
  * sticker look closer to yellow. We keep Lab as the base signal, but deliberately give chroma,
  * saturation and hue more influence than absolute lightness. Hue is only trusted when both
  * colors are sufficiently saturated, so white/gray noise does not create arbitrary hue costs.
+ *
+ * Red/orange needs an extra axis because modern fluorescent oranges can sit only a few HSV degrees
+ * away from red. Normalized (green - blue) is much more stable for that pair than a hard RGB value.
  */
 fun cubeColorDistance(sample: ColorSample, reference: ColorSample): Double {
     val sl = sample.lab
@@ -87,6 +106,21 @@ fun cubeColorDistance(sample: ColorSample, reference: ColorSample): Double {
         circularHueDistance(sf.hue, rf.hue) * .42
     } else 0.0
 
+    // Special red/orange separation. Only activate when both colors are strongly red-dominant,
+    // so green/blue/yellow are unaffected. This is based on relative channels, not fixed exposure.
+    val bothRedOrange = sf.rn > .56 && rf.rn > .56 &&
+        (sf.hue < 52.0 || sf.hue > 330.0) && (rf.hue < 52.0 || rf.hue > 330.0)
+    val redOrange = if (bothRedOrange) {
+        abs(sf.redOrangeAxis - rf.redOrangeAxis) * 245.0
+    } else 0.0
+
+    // If one side of the comparison is clearly orange-like and the other clearly red-like,
+    // add a categorical margin. The gap is intentionally wide enough to tolerate auto-WB drift.
+    val crossesRedOrangeBoundary =
+        (sf.redOrangeAxis > .035 && rf.redOrangeAxis < .012) ||
+        (rf.redOrangeAxis > .035 && sf.redOrangeAxis < .012)
+    val redOrangeBoundaryPenalty = if (bothRedOrange && crossesRedOrangeBoundary) 18.0 else 0.0
+
     // Strongly separate neutral white from chromatic yellow/orange even under warm auto-WB.
     val neutralPenalty = when {
         rf.saturation < .30 && sf.saturation > .38 -> (sf.saturation - .38) * 85.0
@@ -94,5 +128,5 @@ fun cubeColorDistance(sample: ColorSample, reference: ColorSample): Double {
         else -> 0.0
     }
 
-    return lab + saturation + chromaticity + hue + neutralPenalty
+    return lab + saturation + chromaticity + hue + redOrange + redOrangeBoundaryPenalty + neutralPenalty
 }
