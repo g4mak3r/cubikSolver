@@ -32,8 +32,6 @@ internal object FiveByFiveMacroReduction {
     private const val N = 5
     private const val FACELETS = 150
     private const val CENTRE_TARGET = 54
-
-    // Two wings per edge. An exactly oriented wing is worth four points, hence 12 * 2 * 4.
     private const val EDGE_TARGET = 96
     private const val STAGE_ATTEMPTS = 5
     private const val MAX_STAGE_MOVES = 420
@@ -47,7 +45,7 @@ internal object FiveByFiveMacroReduction {
 
     fun solve(state: CubeState, budgetMillis: Long = 25_000L): Result {
         require(state.size == 5) { "5x5 reduction expects CubeState(5)" }
-        val p = pool // pool construction is paid once and is not part of per-solve budget
+        val p = pool
         val start = model.flatState(state)
         val session = SearchSession(
             model = model,
@@ -58,7 +56,6 @@ internal object FiveByFiveMacroReduction {
         return session.reduce(start)
     }
 
-    /** Long-known reduction parity algorithms, expressed only through legal cubikSolver moves. */
     fun edgeFlipParity(): List<Move> = simplify(buildList {
         addAll(innerLayer(Face.R, 2, 2)); add(Move(Face.B, 1, 2)); add(Move(Face.U, 1, 2))
         addAll(innerLayer(Face.L, 2, 1)); add(Move(Face.U, 1, 2))
@@ -134,9 +131,7 @@ internal object FiveByFiveMacroReduction {
                 if (edges != null) {
                     current = edges.state
                     moves += edges.moves
-                    if (model.centresSolved(current) && model.edgesPaired(current)) {
-                        return success(current, moves)
-                    }
+                    if (model.centresSolved(current) && model.edgesPaired(current)) return success(current, moves)
                 }
 
                 if (pass == MAX_PASSES - 1 || outOfTime()) break
@@ -213,7 +208,10 @@ internal object FiveByFiveMacroReduction {
                 val before = score(state)
                 if (before >= target && legal(state)) return StageResult(state, simplify(out))
 
-                var step = findBasic(state, pool.basicOperators) { legal(it) && score(it) > before }
+                // Direct depth 1..3 search is intentionally first. A useful big-cube step often has
+                // no improving one-turn prefix: two slices or a slice/face/slice sequence must be
+                // judged as a unit. This was the missing piece in the first compact implementation.
+                var step = findShort(state, before, legal, score)
                     ?: findOperator(state, operators, wrappersOne) { legal(it) && score(it) > before }
 
                 val nearlyDone = before >= target - DEEP_WINDOW
@@ -236,10 +234,7 @@ internal object FiveByFiveMacroReduction {
                     }
                     step = bestSideways(state, operators, wrappersOne, before, allowance, legal, score)
                         ?: bestSideways(state, operators, wrappersNone, before, allowance, legal, score)
-                        ?: run {
-                            lastAttemptBest = best
-                            return null
-                        }
+                        ?: run { lastAttemptBest = best; return null }
                 }
 
                 state = model.applyMoves(state, step)
@@ -259,10 +254,40 @@ internal object FiveByFiveMacroReduction {
             return null
         }
 
-        private fun findBasic(state: ByteArray, operators: List<Operator>, accept: (ByteArray) -> Boolean): List<Move>? {
-            for (op in operators) {
-                model.applyPerm(state, op.perm, scratchB)
-                if (accept(scratchB)) return op.moves
+        /** Search all short sequences from outer turns + isolated slices, just like a human setup. */
+        private fun findShort(
+            state: ByteArray,
+            before: Int,
+            legal: (ByteArray) -> Boolean,
+            score: (ByteArray) -> Int
+        ): List<Move>? {
+            val ops = pool.shortOperators
+            for (a in ops) {
+                if (outOfTime()) return null
+                model.applyPerm(state, a.perm, scratchA)
+                if (legal(scratchA) && score(scratchA) > before) return a.moves
+            }
+            for (a in ops) {
+                if (outOfTime()) return null
+                model.applyPerm(state, a.perm, scratchA)
+                for (b in ops) {
+                    if (a.layerKey == b.layerKey) continue
+                    model.applyPerm(scratchA, b.perm, scratchB)
+                    if (legal(scratchB) && score(scratchB) > before) return a.moves + b.moves
+                }
+            }
+            for (a in ops) {
+                if (outOfTime()) return null
+                model.applyPerm(state, a.perm, scratchA)
+                for (b in ops) {
+                    if (a.layerKey == b.layerKey) continue
+                    model.applyPerm(scratchA, b.perm, scratchB)
+                    for (c in ops) {
+                        if (b.layerKey == c.layerKey) continue
+                        model.applyPerm(scratchB, c.perm, scratchC)
+                        if (legal(scratchC) && score(scratchC) > before) return a.moves + b.moves + c.moves
+                    }
+                }
             }
             return null
         }
@@ -362,7 +387,8 @@ internal object FiveByFiveMacroReduction {
         val moves: List<Move>,
         val perm: ShortArray,
         val centreSupport: Int,
-        val edgeSupport: Int
+        val edgeSupport: Int,
+        val layerKey: String = moves.joinToString("+") { "${it.face.symbol}:${it.width}" }
     )
 
     private class OperatorPool(private val model: Model) {
@@ -371,7 +397,7 @@ internal object FiveByFiveMacroReduction {
         private val innerAtoms = buildInnerAtoms()
         val wrapperAtoms = outerAtoms + wideAtoms + innerAtoms
 
-        val basicOperators: List<Operator>
+        val shortOperators: List<Operator>
         val centreSafe: List<Operator>
         val narrowCentre: List<Operator>
         val centreFine: List<Operator>
@@ -379,7 +405,7 @@ internal object FiveByFiveMacroReduction {
 
         init {
             val reference = model.solvedFlat
-            basicOperators = wrapperAtoms.map { toOperator(it.moves, reference) }
+            shortOperators = (outerAtoms + innerAtoms).map { toOperator(it.moves, reference) }
 
             val safe = ArrayList<Operator>()
             val narrow = ArrayList<Operator>()
@@ -397,34 +423,24 @@ internal object FiveByFiveMacroReduction {
                 if (op.centreSupport in 1..NARROW_CENTRE_LIMIT && narrow.size < MAX_PER_LIST) narrow += op
             }
 
-            // Four core families from big-cube reduction: slice/face commutators in both orders and
-            // slice/slice commutators. The extra three-slot family provides useful four-piece tools
-            // that the pure commutators cannot reach.
             for (a in carrier) for (b in outerAtoms) {
                 consider(commutator(a.moves, b.moves))
                 consider(commutator(b.moves, a.moves))
             }
-            for (a in carrier) for (b in carrier) {
-                if (a.key != b.key) consider(commutator(a.moves, b.moves))
-            }
+            for (a in carrier) for (b in carrier) if (a.key != b.key) consider(commutator(a.moves, b.moves))
             for (a in carrier) for (b in outerAtoms) for (c in carrier) {
                 if (a.key == c.key) continue
                 consider(a.moves + b.moves + c.moves + inverseSequence(a.moves))
                 if (safe.size >= MAX_PER_LIST && narrow.size >= MAX_PER_LIST) break
             }
-
             for (algorithm in listOf(edgeFlipParity(), edgeSwapParity())) {
-                consider(algorithm)
-                consider(inverseSequence(algorithm))
+                consider(algorithm); consider(inverseSequence(algorithm))
             }
 
             safe.sortWith(compareBy<Operator>({ it.edgeSupport }, { it.moves.size }))
             narrow.sortWith(compareBy<Operator>({ it.centreSupport }, { it.moves.size }))
-
-            // Pairs of narrow centre-safe operators are crucial for the last-two-edges plateau.
             val safePairs = refineSafePairs(safe, reference)
-            centreSafe = dedupe(safe + safePairs)
-                .sortedWith(compareBy<Operator>({ it.edgeSupport }, { it.moves.size }))
+            centreSafe = dedupe(safe + safePairs).sortedWith(compareBy<Operator>({ it.edgeSupport }, { it.moves.size }))
             narrowCentre = narrow
             centreFine = refineCentres(narrow, reference)
             edgeFinishers = buildEdgeFinishers(centreSafe, reference)
@@ -437,11 +453,7 @@ internal object FiveByFiveMacroReduction {
         }
 
         private fun buildInnerAtoms(): List<Atom> = buildList {
-            for (face in Face.entries) for (turns in 1..3) {
-                add(Atom(innerLayer(face, 2, turns), "inner-2-${face.symbol}"))
-            }
-            // The middle layer is the same physical slice when named from the opposite face, so keep
-            // only U/R/F spellings to avoid searching every sequence twice.
+            for (face in Face.entries) for (turns in 1..3) add(Atom(innerLayer(face, 2, turns), "inner-2-${face.symbol}"))
             for (face in listOf(Face.U, Face.R, Face.F)) for (turns in 1..3) {
                 add(Atom(innerLayer(face, 3, turns), "inner-3-${face.symbol}"))
             }
@@ -452,10 +464,10 @@ internal object FiveByFiveMacroReduction {
             val moved = ByteArray(FACELETS)
             model.applyPerm(reference, perm, moved)
             return Operator(
-                moves = moves,
-                perm = perm,
-                centreSupport = CENTRE_TARGET - model.centreScore(moved),
-                edgeSupport = model.edgeStickerMismatch(moved, reference)
+                moves,
+                perm,
+                CENTRE_TARGET - model.centreScore(moved),
+                model.edgeStickerMismatch(moved, reference)
             )
         }
 
@@ -539,8 +551,7 @@ internal object FiveByFiveMacroReduction {
                 val moved = ByteArray(FACELETS)
                 model.applyPerm(reference, op.perm, moved)
                 if (model.unpairedEdgeCount(moved) in 1..2) {
-                    out += op
-                    out += toOperator(inverseSequence(op.moves), reference)
+                    out += op; out += toOperator(inverseSequence(op.moves), reference)
                     if (out.size >= REFINE_CAP) break@outer
                 }
             }
@@ -552,10 +563,10 @@ internal object FiveByFiveMacroReduction {
             val moved = ByteArray(FACELETS)
             model.applyPerm(reference, perm, moved)
             return Operator(
-                moves = simplify(a.moves + b.moves),
-                perm = perm,
-                centreSupport = CENTRE_TARGET - model.centreScore(moved),
-                edgeSupport = model.edgeStickerMismatch(moved, reference)
+                simplify(a.moves + b.moves),
+                perm,
+                CENTRE_TARGET - model.centreScore(moved),
+                model.edgeStickerMismatch(moved, reference)
             )
         }
 
@@ -581,9 +592,7 @@ internal object FiveByFiveMacroReduction {
     private class Model {
         private val template = CubeState(N)
         private val keys: List<StickerKey> = buildList(FACELETS) {
-            for (face in Face.entries) for (r in 0 until N) for (c in 0 until N) {
-                add(template.keyFromFaceCell(face, r, c))
-            }
+            for (face in Face.entries) for (r in 0 until N) for (c in 0 until N) add(template.keyFromFaceCell(face, r, c))
         }
         private val indexByKey = keys.withIndex().associate { it.value to it.index }
         private val movePermCache = HashMap<Move, ShortArray>()
@@ -618,11 +627,6 @@ internal object FiveByFiveMacroReduction {
 
         fun centresSolved(state: ByteArray) = centreScore(state) == CENTRE_TARGET
 
-        /**
-         * Dense edge score. A full paired-edge-only score has huge flat plateaus: on a scramble it
-         * can be 0/24 even when a useful operator has just placed one wing correctly. Here each wing
-         * is scored against its fixed middle edge, so the search can see partial progress.
-         */
         fun edgePairingScore(state: ByteArray): Int {
             var total = 0
             for (slot in edgeSlots) {
@@ -688,9 +692,7 @@ internal object FiveByFiveMacroReduction {
             val destinationForSource = IntArray(FACELETS)
             for (source in 0 until FACELETS) {
                 var key = keys[source]
-                if (key.inSlab5(move.face, move.width, N)) {
-                    repeat(move.quarterTurns) { key = key.rotateClockwise5(move.face, N) }
-                }
+                if (key.inSlab5(move.face, move.width, N)) repeat(move.quarterTurns) { key = key.rotateClockwise5(move.face, N) }
                 destinationForSource[source] = indexByKey.getValue(key)
             }
             ShortArray(FACELETS).also { sourceForDestination ->
@@ -705,7 +707,6 @@ internal object FiveByFiveMacroReduction {
                 val boundaries = listOf(key.x, key.y, key.z).count { it == 0 || it == N - 1 }
                 if (boundaries == 2) cubies.getOrPut(Coord(key.x, key.y, key.z)) { ArrayList(2) } += index
             }
-
             data class Piece(val variable: Int, val a: Int, val b: Int)
             val byFaces = LinkedHashMap<Pair<Int, Int>, MutableList<Piece>>()
             for ((coord, indices) in cubies) {
@@ -737,7 +738,6 @@ internal object FiveByFiveMacroReduction {
 
     private fun commutator(a: List<Move>, b: List<Move>) = a + b + inverseSequence(a) + inverseSequence(b)
 
-    /** Pure layer turn at 1-based depth [layer], represented through nested wide turns. */
     private fun innerLayer(face: Face, layer: Int, turns: Int): List<Move> {
         require(layer in 2..3)
         val inverse = if (turns == 2) 2 else 4 - turns
@@ -755,6 +755,9 @@ internal object FiveByFiveMacroReduction {
         innerLayer(Face.L, 2, 1) + Move.parseAlgorithm("U F' U' F") + innerLayer(Face.L, 2, 3),
         Move.parseAlgorithm("3Uw' R U R' F R' F' R 3Uw"),
         Move.parseAlgorithm("3Uw R U R' F R' F' R 3Uw'"),
+        innerLayer(Face.U, 3, 3) + Move.parseAlgorithm("R U R' F R' F' R") + innerLayer(Face.U, 3, 1),
+        innerLayer(Face.D, 3, 1) + Move.parseAlgorithm("R F' U R' F") + innerLayer(Face.D, 3, 3),
+        Move.parseAlgorithm("3Dw R F' U R' F 3Dw'"),
         Move.parseAlgorithm("Uw' R U2 R' F R' F' R Uw"),
         Move.parseAlgorithm("Dw R2 F' U R' F Dw'")
     ).map(::simplify)
