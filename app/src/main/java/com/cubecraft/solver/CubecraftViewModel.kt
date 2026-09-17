@@ -194,7 +194,7 @@ class CubecraftViewModel : ViewModel() {
             }
         }
 
-        val orientationResult = if (cubeSize == 3) {
+        val orientationResult = if (cubeSize == 3 || cubeSize == 5) {
             try { ThreeByThreeOrientationResolver.resolve(classified.faces) }
             catch (_: Throwable) { null }
         } else null
@@ -468,8 +468,18 @@ class CubecraftViewModel : ViewModel() {
         val target = appliedMoves.coerceIn(0, solution.size)
         if (target == solutionIndex) return
 
-        cube.loadFaces(start)
-        for (i in 0 until target) cube.apply(solution[i])
+        // NEXT/PREV and a slowly dragged slider are now O(1): on a 5x5 solution with several
+        // hundred reduction moves there is no reason to rebuild all 150 stickers from START for
+        // every adjacent step. Large slider jumps still reconstruct deterministically from the
+        // exact scanned snapshot so there is no accumulated preview drift.
+        when {
+            target == solutionIndex + 1 -> cube.apply(solution[solutionIndex])
+            target == solutionIndex - 1 -> cube.apply(solution[target].inverse())
+            else -> {
+                cube.loadFaces(start)
+                for (i in 0 until target) cube.apply(solution[i])
+            }
+        }
         solutionIndex = target
         history.clear()
         redo.clear()
