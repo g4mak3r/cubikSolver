@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -25,7 +26,7 @@ fun ReviewScreen(
     report: ValidationReport?,
     message: String?,
     onRotate: (Face) -> Unit,
-    onCell: (Face,Int) -> Unit,
+    onSetColor: (Face,Int,Face) -> Unit,
     onAccept: () -> Unit,
     onRescan: () -> Unit,
     onBack: () -> Unit
@@ -38,7 +39,7 @@ fun ReviewScreen(
             face = editingFace!!,
             colors = faces.getValue(editingFace!!),
             palette = palette,
-            onCell = { index -> onCell(editingFace!!, index) },
+            onSetColor = { index, color -> onSetColor(editingFace!!, index, color) },
             onRotate = { onRotate(editingFace!!) },
             onDone = { editingFace = null }
         )
@@ -110,10 +111,15 @@ private fun FaceEditScreen(
     face: Face,
     colors: List<Face>,
     palette: Map<Face,RgbColor>,
-    onCell: (Int) -> Unit,
+    onSetColor: (Int,Face) -> Unit,
     onRotate: () -> Unit,
     onDone: () -> Unit
 ) {
+    val center = size * size / 2
+    var selectedCell by remember(face, size) { mutableIntStateOf(0) }
+    val selectedColor = colors.getOrElse(selectedCell) { face }
+    val centerSelected = selectedCell == center
+
     Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -126,11 +132,11 @@ private fun FaceEditScreen(
 
         Text("Correct ${face.symbol} face", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Black)
         Text(
-            "Tap an incorrect sticker to cycle its color. The fixed center stays locked.",
+            "Select a wrong sticker, then choose its real color below. The fixed center stays locked.",
             color = Muted, fontSize = 12.sp, lineHeight = 16.sp
         )
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         Surface(
             Modifier.fillMaxWidth().weight(1f),
             color = Panel,
@@ -145,8 +151,46 @@ private fun FaceEditScreen(
                     modifier = Modifier
                         .fillMaxWidth(if (size == 3) .82f else .90f)
                         .aspectRatio(1f),
-                    onTap = onCell
+                    onTap = { selectedCell = it }
                 )
+            }
+        }
+
+        Spacer(Modifier.height(9.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (centerSelected) "CENTER · LOCKED" else "STICKER ${selectedCell + 1} · ${selectedColor.symbol}",
+                color = if (centerSelected) Muted else Ink,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(Modifier.weight(1f))
+            Text("CHOOSE COLOR", color = Muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(5.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Face.entries.forEach { color ->
+                val active = color == selectedColor
+                Surface(
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    onClick = { if (!centerSelected) onSetColor(selectedCell, color) },
+                    enabled = !centerSelected,
+                    color = faceColor(color, palette),
+                    shape = RoundedCornerShape(11.dp),
+                    border = BorderStroke(
+                        if (active) 3.dp else 1.dp,
+                        if (active) Accent else Color.Black.copy(alpha = .24f)
+                    )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            color.symbol.toString(),
+                            color = if (color == Face.U || color == Face.D) Ink else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
             }
         }
 
