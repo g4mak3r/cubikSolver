@@ -5,11 +5,12 @@ import com.cubecraft.solver.model.Move
 import cs.min2phase.Search
 
 /**
- * Verified 3x3 solver backed by min2phase.
+ * 3x3 solver backed by Chen Shuang's min2phase implementation.
  *
- * The first pass deliberately keeps searching after the first solution for a while so the user
- * normally gets a shorter practical sequence instead of the first valid sequence found. If that
- * tighter search budget is exhausted we fall back to a deeper reliability pass.
+ * IMPORTANT: validation and solving are deliberately separate.
+ * Search.verify(facelets) is the library's native physical-state validator and does not build the
+ * pruning/search tables. Review screens must use that instead of trying to solve the cube merely
+ * to decide whether it is legal.
  */
 class Min2PhaseSolver : CubeSolver {
     private data class SearchConfig(
@@ -23,6 +24,9 @@ class Min2PhaseSolver : CubeSolver {
         if (state.isSolved()) return SolverResult.Success(emptyList())
 
         val facelets = state.toMin2PhaseString()
+        val verifyCode = verifyFacelets(facelets)
+        if (verifyCode != 0) return SolverResult.Invalid(errorMeaning(verifyCode))
+
         val configs = listOf(
             SearchConfig(maxDepth = 21, probeMax = 2_000_000L, probeMin = 120_000L),
             SearchConfig(maxDepth = 24, probeMax = 12_000_000L, probeMin = 0L)
@@ -39,7 +43,7 @@ class Min2PhaseSolver : CubeSolver {
                     0
                 )
             } catch (t: Throwable) {
-                return SolverResult.Invalid("Solver failed: ${t.message ?: t.javaClass.simpleName}")
+                return SolverResult.Invalid("Solver engine failed: ${t.message ?: t.javaClass.simpleName}")
             }
 
             if (text.startsWith("Error")) {
@@ -64,13 +68,26 @@ class Min2PhaseSolver : CubeSolver {
         return SolverResult.Invalid(errorMeaning(lastError))
     }
 
-    fun validate(state: CubeState): String? = when (val r = solve(state)) {
-        is SolverResult.Success -> null
-        is SolverResult.Invalid -> r.reason
-        is SolverResult.Unavailable -> r.reason
+    /**
+     * Native min2phase validation only. This is intentionally NOT implemented through solve().
+     * The library returns 0 for a legal cube and negative error codes for invalid facelets.
+     */
+    fun validate(state: CubeState): String? {
+        if (state.size != 3) return "Two-phase validator expects 3x3"
+        val code = try {
+            verifyFacelets(state.toMin2PhaseString())
+        } catch (t: Throwable) {
+            return "Validator engine failed: ${t.message ?: t.javaClass.simpleName}"
+        }
+        return if (code == 0) null else errorMeaning(code)
     }
 
-    private fun errorMeaning(raw: String): String = when (raw.filter(Char::isDigit).toIntOrNull()) {
+    internal fun verifyFacelets(facelets: String): Int = Search().verify(facelets)
+
+    private fun errorMeaning(raw: String): String =
+        errorMeaning(raw.filter(Char::isDigit).toIntOrNull() ?: 0)
+
+    private fun errorMeaning(rawCode: Int): String = when (kotlin.math.abs(rawCode)) {
         1 -> "Exactly nine stickers of each center identity are required."
         2 -> "One or more edge pieces are impossible. Check face orientation."
         3 -> "An edge is flipped in a physically impossible way. Check the scan."
@@ -79,6 +96,6 @@ class Min2PhaseSolver : CubeSolver {
         6 -> "Permutation parity is impossible. At least one scanned sticker/orientation is wrong."
         7 -> "No solution was found within the configured depth."
         8 -> "Search limit reached."
-        else -> "Invalid cube state ($raw)."
+        else -> "Invalid cube state (error $rawCode)."
     }
 }
