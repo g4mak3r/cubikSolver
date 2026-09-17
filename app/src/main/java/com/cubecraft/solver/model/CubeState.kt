@@ -40,7 +40,8 @@ class CubeState(val size: Int) {
         Face.entries.associateWith { face -> faceColors(face) }
 
     fun loadFaces(faces: Map<Face, List<Face>>) {
-        val expected = size * size
+        val n = size
+        val expected = n * n
         val bad = Face.entries.filter { face -> faces[face]?.size != expected }
         require(bad.isEmpty()) {
             val details = Face.entries.joinToString { face ->
@@ -52,8 +53,8 @@ class CubeState(val size: Int) {
         stickers.clear()
         for (face in Face.entries) {
             val values = faces.getValue(face)
-            for (r in 0 until size) for (c in 0 until size) {
-                stickers[keyFromFaceCell(face, r, c)] = values[r * size + c]
+            for (r in 0 until n) for (c in 0 until n) {
+                stickers[keyFromFaceCell(face, r, c)] = values[r * n + c]
             }
         }
 
@@ -62,10 +63,20 @@ class CubeState(val size: Int) {
         }
     }
 
-    fun faceColors(face: Face): List<Face> = buildList(size * size) {
-        for (r in 0 until size) for (c in 0 until size) {
-            val key = keyFromFaceCell(face, r, c)
-            add(requireNotNull(stickers[key]) { "Missing sticker ${face.symbol}[$r,$c] at $key" })
+    /**
+     * Snapshot one face in row-major scan order.
+     *
+     * Keep n outside buildList. Inside buildList { ... }, an unqualified `size` resolves to the
+     * MutableList builder's current size (initially 0), not CubeState.size. That shadowing bug made
+     * every face snapshot empty and ultimately produced min2phase errors such as "index: 4, size: 0".
+     */
+    fun faceColors(face: Face): List<Face> {
+        val n = size
+        return buildList(n * n) {
+            for (r in 0 until n) for (c in 0 until n) {
+                val key = keyFromFaceCell(face, r, c)
+                add(requireNotNull(stickers[key]) { "Missing sticker ${face.symbol}[$r,$c] at $key" })
+            }
         }
     }
 
@@ -118,12 +129,15 @@ class CubeState(val size: Int) {
 
     /** Odd-cube fixed centers, corners and middle edge pieces form a legal 3x3 skeleton. */
     fun reducedSkeleton3x3(): CubeState {
-        require(size % 2 == 1) { "Reduced 3x3 skeleton requires an odd cube size" }
-        if (size == 3) return deepCopy()
-        val pick = listOf(0, size / 2, size - 1)
+        val n = size
+        require(n % 2 == 1) { "Reduced 3x3 skeleton requires an odd cube size" }
+        if (n == 3) return deepCopy()
+        val pick = listOf(0, n / 2, n - 1)
         val faces = Face.entries.associateWith { face ->
             val src = faceColors(face)
-            buildList(9) { for (r in pick) for (c in pick) add(src[r * size + c]) }
+            buildList(9) {
+                for (r in pick) for (c in pick) add(src[r * n + c])
+            }
         }
         return CubeState(3).also { it.loadFaces(faces) }
     }
