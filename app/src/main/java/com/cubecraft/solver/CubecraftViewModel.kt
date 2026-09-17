@@ -105,21 +105,44 @@ class CubecraftViewModel : ViewModel() {
 
     fun restartScan() { beginScan(cubeSize) }
 
+    /**
+     * Face six is a hard transition point. We must never silently throw the user back to face one.
+     * Balanced classification is preferred; if it fails we still open Review with a center-calibrated
+     * nearest-colour fallback so the scan can be inspected and repaired manually.
+     */
     private fun finishClassification() {
+        val classified: ClassifiedScan
+        var usedFallback = false
+
         try {
-            val classified = BalancedClassifier.classify(captures, cubeSize)
-            reviewFaces = classified.faces
-            palette = classified.palette
-            cube = CubeState(cubeSize).also { it.loadFaces(classified.faces) }
-            revision++
-            validation = null
-            message = "Scan captured · validating cube state…"
-            screen = AppScreen.REVIEW
-            validateReviewAsync()
-        } catch (t: Throwable) {
-            message = "Classification failed: ${t.message}"
-            restartScan()
+            classified = BalancedClassifier.classify(captures, cubeSize)
+        } catch (balancedError: Throwable) {
+            try {
+                classified = BalancedClassifier.classifyNearest(captures, cubeSize)
+                usedFallback = true
+            } catch (fallbackError: Throwable) {
+                // Keep the user on FACE 6 so only the last face has to be recaptured.
+                // Do not call restartScan(): that used to erase the error and create an endless
+                // six-face loop that looked as if the app had no post-scan flow at all.
+                scanIndex = 5
+                scanQuality = 0f
+                message = "Could not finalize the scan: ${fallbackError.message ?: balancedError.message ?: "unknown error"}. Recapture the last face."
+                return
+            }
         }
+
+        reviewFaces = classified.faces
+        palette = classified.palette
+        cube = CubeState(cubeSize).also { it.loadFaces(classified.faces) }
+        revision++
+        validation = null
+        message = if (usedFallback) {
+            "Six faces captured. Review the fallback color map before continuing."
+        } else {
+            "Six faces captured · validating cube state…"
+        }
+        screen = AppScreen.REVIEW
+        validateReviewAsync()
     }
 
     fun rotateReviewFace(face: Face) {
