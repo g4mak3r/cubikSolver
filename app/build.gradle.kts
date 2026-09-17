@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 
 plugins {
     id("com.android.application")
@@ -31,6 +33,16 @@ android {
     }
     buildFeatures { compose = true }
     packaging { resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*") }
+
+    testOptions {
+        unitTests.all {
+            it.testLogging {
+                events = setOf(TestLogEvent.FAILED, TestLogEvent.STANDARD_OUT, TestLogEvent.STANDARD_ERROR)
+                exceptionFormat = TestExceptionFormat.FULL
+                showStandardStreams = true
+            }
+        }
+    }
 }
 
 dependencies {
