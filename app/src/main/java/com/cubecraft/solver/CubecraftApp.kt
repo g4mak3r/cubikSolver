@@ -26,7 +26,6 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
     )
 
     MaterialTheme(colorScheme = colors) {
-        // Surface is important: it supplies a readable LocalContentColor to all Text.
         Surface(Modifier.fillMaxSize(), color = AppBg, contentColor = Ink) {
             when (vm.screen) {
                 AppScreen.HOME -> HomeScreen(vm::beginScan, vm::openVirtual)
@@ -46,7 +45,7 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                     vm.solution, vm.solutionIndex, vm.currentGuideMove, vm.solving,
                     vm.message, vm.hasBaseline, vm::home, vm::applyMove, vm::undo,
                     vm::redo, vm::returnToScan, vm::resetSolved, vm::solve,
-                    vm::solutionNext, vm::solutionPrevious, vm::paintSticker
+                    vm::solutionNext, vm::solutionPrevious, vm::solutionSeek, vm::paintSticker
                 )
             }
         }
