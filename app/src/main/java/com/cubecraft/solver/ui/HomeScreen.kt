@@ -29,11 +29,11 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
                 Text("OFFLINE · CAMERA SOLVER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
-            Text("0.4", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text("0.5.0", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("CUBECRAFT", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 2.2.sp, color = InkSoft)
+        Text("cubikSolver", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp, color = InkSoft)
         Spacer(Modifier.height(8.dp))
         Text("Your cube,\nreconstructed.", fontSize = 38.sp, lineHeight = 40.sp, fontWeight = FontWeight.Black, color = Ink)
         Spacer(Modifier.height(10.dp))
