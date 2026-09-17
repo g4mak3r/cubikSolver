@@ -8,15 +8,15 @@ import com.cubecraft.solver.model.Move
  * Offline arbitrary-state 5x5 solver.
  *
  * Pipeline:
- * 1. validate sticker counts and fixed centres;
+ * 1. validate sticker counts and the scanned fixed-centre identities;
  * 2. solve the six 3x3 centre blocks and pair all twelve 5x5 edges;
- * 3. project the reduced cube onto its 3x3 skeleton;
- * 4. repair reduction parity if the projected 3x3 is not physically reachable;
- * 5. solve the reduced 3x3 with min2phase;
+ * 3. project the reduced cube onto a 3x3 skeleton and normalize its current centre frame;
+ * 4. repair reduction parity if that 3x3 is not physically reachable;
+ * 5. solve the normalized reduced 3x3 with min2phase;
  * 6. replay the complete candidate on the original 150-sticker state.
  *
- * solve() never receives or reconstructs scramble history. A camera scan and a virtual cube with
- * the same 150 stickers therefore take exactly the same path through the solver.
+ * solve() receives no scramble history. Camera and virtual states with the same 150 stickers take
+ * the same arbitrary-state path.
  */
 class FiveByFiveSolver(
     private val three: Min2PhaseSolver = Min2PhaseSolver()
@@ -25,7 +25,7 @@ class FiveByFiveSolver(
 
     override fun solve(state: CubeState): SolverResult {
         if (state.size != 5) return SolverResult.Invalid("5x5 solver expects 5x5")
-        if (state.isSolved()) return SolverResult.Success(emptyList())
+        if (state.isUniformSolved()) return SolverResult.Success(emptyList())
 
         validateBasicState(state)?.let { return SolverResult.Invalid(it) }
 
@@ -33,8 +33,8 @@ class FiveByFiveSolver(
         val work = state.deepCopy()
         val allMoves = ArrayList<Move>()
 
-        // A parity fix can disturb the just-built reduction, so the pipeline is allowed to rebuild
-        // centres/edges a couple of times before the final outer-turn solve.
+        // A parity repair can unpair an edge. Reduction is therefore allowed to rebuild a few times
+        // before the final outer-turn solve.
         for (pass in 0 until 4) {
             val reduction = try {
                 FiveByFiveMacroReduction.solve(
@@ -56,7 +56,7 @@ class FiveByFiveSolver(
             allMoves += reduction.moves
 
             val projected = try {
-                work.reducedSkeleton3x3()
+                normalizeProjection(work.reducedSkeleton3x3())
             } catch (t: Throwable) {
                 return SolverResult.Invalid("Could not project reduced 5x5 to 3x3: ${t.message ?: t.javaClass.simpleName}")
             }
@@ -66,16 +66,16 @@ class FiveByFiveSolver(
                     work.applyAll(result.moves)
                     allMoves += result.moves
 
-                    if (!work.isSolved()) {
+                    if (!work.isUniformSolved()) {
                         return SolverResult.Invalid(
-                            "5x5 reduced 3x3 solved, but full cube replay still has unpaired pieces"
+                            "5x5 reduced 3x3 solved, but the full cube still has unpaired pieces"
                         )
                     }
 
                     val simplified = FiveByFiveMacroReduction.simplify(allMoves)
                     val check = original.deepCopy()
                     check.applyAll(simplified)
-                    if (!check.isSolved()) {
+                    if (!check.isUniformSolved()) {
                         return SolverResult.Invalid("5x5 final replay verification failed")
                     }
                     return SolverResult.Success(simplified)
@@ -95,8 +95,6 @@ class FiveByFiveSolver(
                     }
                     work.applyAll(parity)
                     allMoves += parity
-                    // Loop: the parity algorithm is legal on the physical 5x5 but may unpair one
-                    // edge, so rebuild the reduction before projecting again.
                 }
 
                 is SolverResult.Unavailable -> return SolverResult.Unavailable(result.reason)
@@ -115,7 +113,31 @@ class FiveByFiveSolver(
         val candidate = historyFromSolved.asReversed().map { it.inverse() }
         val check = state.deepCopy()
         check.applyAll(candidate)
-        return if (check.isSolved()) SolverResult.Success(candidate) else solve(state)
+        return if (check.isUniformSolved()) SolverResult.Success(candidate) else solve(state)
+    }
+
+    /**
+     * Reduction is allowed to use middle-layer turns, which can rotate the six centre identities as
+     * a whole frame. min2phase names colours by the *current* U/R/F/D/L/B centres, so remap the
+     * projected colours before handing it over. Returned moves still name physical faces and can be
+     * replayed directly on the 5x5.
+     */
+    private fun normalizeProjection(projected: CubeState): CubeState {
+        val colorToPosition = LinkedHashMap<Face, Face>()
+        for (position in Face.entries) {
+            val color = projected.faceColors(position)[4]
+            require(colorToPosition.put(color, position) == null) {
+                "Reduced cube has duplicate centre identity ${color.symbol}"
+            }
+        }
+        require(colorToPosition.size == 6) { "Reduced cube does not expose six distinct centres" }
+
+        val normalized = Face.entries.associateWith { position ->
+            projected.faceColors(position).map { color ->
+                colorToPosition[color] ?: error("No current centre for color ${color.symbol}")
+            }
+        }
+        return CubeState(3).also { it.loadFaces(normalized) }
     }
 
     private fun parityFor(reason: String): List<Move>? = when {
@@ -139,4 +161,10 @@ class FiveByFiveSolver(
         }
         return null
     }
+
+    private fun CubeState.isUniformSolved(): Boolean =
+        Face.entries.all { face ->
+            val colors = faceColors(face)
+            colors.isNotEmpty() && colors.all { it == colors[0] }
+        }
 }
