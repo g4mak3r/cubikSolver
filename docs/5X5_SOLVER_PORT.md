@@ -47,7 +47,7 @@ Useful research for center solving, but its README explicitly says development s
 
 ## Current architecture decision
 
-Do **not** commit to a 2 GB lookup-table bundle.
+Do **not** make the main APK depend on a 2 GB lookup-table bundle yet.
 
 Preferred direction for the first production 5x5 engine:
 
@@ -55,11 +55,33 @@ Preferred direction for the first production 5x5 engine:
 
 The compact reduction engine may start in Kotlin/JVM for fast iteration and move to a small C/C++ core through JNI only if profiling on the Kirin 710A proves it necessary.
 
+### Optional heavy solver pack
+
+A roughly 2 GB data set is not automatically disqualified for this project because the target device is being sideloaded rather than distributed only through Google Play. The bad design would be making every APK itself roughly 2 GB.
+
+If the table-light engine cannot reach the required reliability/speed, use a separate versioned file such as:
+
+`cubikSolver-5x5-pack-v1.cspack`
+
+Recommended behavior:
+
+- the normal APK stays comparatively small;
+- the pack is copied to the phone once and survives normal APK updates;
+- the app imports/selects it through Android's Storage Access Framework, so no broad storage permission is required;
+- native code can receive the pack's file descriptor and memory-map table ranges instead of copying ~2 GB into RAM;
+- the pack contains a manifest, format version, table offsets/sizes and hashes;
+- solving remains fully offline after the pack is present;
+- a missing/incompatible pack fails explicitly instead of silently downloading anything.
+
+This gives us a safe fallback: optimize for a table-light solver first, but do not reject mature lookup-table solving merely because its data is large.
+
 ### Reduction strategy
 
 #### Centers
 
 Solve center groups around the six fixed centers using deterministic insertions/commutators first. Use bounded IDA*/transposition search only for local endgame cases instead of searching the entire 5x5 state space.
+
+A first bounded sticker-state center search is now in the repository. It accepts only `CubeState(5)`, emits normal `Move` values, and replay-verifies the returned center solution. It currently proves the real state/search plumbing on shallow center states; it is deliberately not wired as the production random-state solver yet.
 
 #### Edge triplets
 
@@ -79,20 +101,28 @@ No reduction phase is trusted blindly. The final move list is applied to a deep 
 
 ## Integration milestones
 
-### M1 - State bridge - STARTED
+### M1 - State bridge / topology - DONE
 
-A stable URFDLB serializer is now part of `CubeState`:
+The repository now has:
 
-- 3x3 -> 54 characters
-- 5x5 -> 150 characters
+- stable 150-character URFDLB serialization for 5x5;
+- 48 movable-center topology;
+- 12 middle-edge pieces;
+- 24 wings;
+- 12 three-piece edge slots;
+- replay-tested outer and wide move geometry.
 
-Tests check solved order, length, color counts and legal scrambled 5x5 serialization.
+### M2 - Center engine - STARTED
 
-Next: add explicit 5x5 piece-index helpers for movable centers, middle edges and both wing orbits.
+`FiveByFiveCenterSearch` is the first search stage that works only from the sticker state. Current tests prove that it can recover solved centers from shallow inner-slice states without receiving scramble history.
 
-### M2 - Center engine
+Next steps:
 
-Return a sequence that solves all six 3x3 center blocks on a scrambled 5x5. Replay every candidate through `CubeState(5)` and assert the center blocks are solved.
+- move from full `CubeState` copies to a compact center state/permutation representation;
+- add center insertion/commutator macros and stronger pruning;
+- test increasingly deep generated center scrambles;
+- define the timeout/node budget for the Huawei target;
+- keep every returned sequence replay-verified through the full `CubeState(5)` model.
 
 ### M3 - Edge pairing
 
@@ -112,7 +142,9 @@ Randomly scramble `CubeState(5)`, discard the scramble history, serialize sticke
 
 ## Performance target
 
-The first goal is reliability, not an optimal move count. A practical offline mobile target is a deterministic solution in seconds rather than minutes, with memory use small enough for the Huawei P Smart 2021. Once correctness is stable, center/edge searches can be profiled and moved native or supplemented with a small number of compact pruning tables where they materially help.
+The first goal is reliability, not an optimal move count. A practical offline mobile target is a deterministic solution in seconds rather than minutes, with memory use small enough for the Huawei P Smart 2021. Once correctness is stable, center/edge searches can be profiled and moved native or supplemented with compact pruning tables where they materially help.
+
+If the compact route misses that target, the heavy solver pack is an acceptable fallback because it decouples solver data from APK updates.
 
 ## Non-negotiable QA
 
@@ -123,4 +155,4 @@ Before enabling arbitrary scanned 5x5 solving in the UI:
 - every result must be replay-verified by `CubeState(5)`;
 - invalid scans must fail cleanly instead of producing moves;
 - full solving must work in airplane mode from first launch;
-- lookup data, if any, must be bundled and intentionally size-budgeted rather than fetched at runtime.
+- lookup data, if any, must be bundled/imported intentionally and never fetched at solve time.
