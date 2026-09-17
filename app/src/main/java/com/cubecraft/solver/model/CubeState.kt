@@ -103,7 +103,11 @@ class CubeState(val size: Int) {
     fun isSolved(): Boolean = Face.entries.all { f -> faceColors(f).all { it == f } }
 
     fun apply(move: Move) {
-        require(move.width <= (size / 2).coerceAtLeast(1)) { "Turn width ${move.width} is too large for ${size}x$size" }
+        // A 5x5 needs three-layer wide turns as a compact way to express the physical middle
+        // slice: 3Rw followed by Rw' is the isolated third layer. The 3x3 solver itself still emits
+        // outer turns only.
+        val maxWidth = if (size == 5) 3 else 1
+        require(move.width <= maxWidth) { "Turn width ${move.width} is too large for ${size}x$size" }
         repeat(move.quarterTurns) { quarterTurn(move.face, move.width) }
     }
 
