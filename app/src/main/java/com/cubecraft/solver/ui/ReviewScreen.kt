@@ -3,6 +3,7 @@ package com.cubecraft.solver.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -29,7 +30,21 @@ fun ReviewScreen(
     onRescan: () -> Unit,
     onBack: () -> Unit
 ) {
-    var selected by remember { mutableStateOf(Face.F) }
+    var editingFace by remember { mutableStateOf<Face?>(null) }
+
+    if (editingFace != null) {
+        FaceEditScreen(
+            size = size,
+            face = editingFace!!,
+            colors = faces.getValue(editingFace!!),
+            palette = palette,
+            onCell = { index -> onCell(editingFace!!, index) },
+            onRotate = { onRotate(editingFace!!) },
+            onDone = { editingFace = null }
+        )
+        return
+    }
+
     Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -39,73 +54,155 @@ fun ReviewScreen(
             Spacer(Modifier.weight(1f))
             Text("SCAN REVIEW", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Black)
         }
+
         Text("Check the cube net", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Black)
         Text(
-            "Tap any wrong sticker directly on the unfolded cube. The enlarged face below is easier for precise edits.",
+            "If everything matches the real cube, continue. Tap a face only when you need to correct it.",
             color = Muted, fontSize = 12.sp, lineHeight = 16.sp
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
         Surface(
-            Modifier.fillMaxWidth(), color = Panel, shape = RoundedCornerShape(22.dp),
+            Modifier.fillMaxWidth().weight(1f),
+            color = Panel,
+            shape = RoundedCornerShape(24.dp),
             border = BorderStroke(1.dp, Outline)
         ) {
-            CubeNet(size, faces, palette, onCell, Modifier.padding(vertical = 10.dp))
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Face.entries.forEach { f ->
-                if (selected == f) Button(
-                    onClick = { selected = f }, modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) { Text(f.symbol.toString(), fontWeight = FontWeight.Black) }
-                else OutlinedButton(
-                    onClick = { selected = f }, modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) { Text(f.symbol.toString(), fontWeight = FontWeight.Bold, color = InkSoft) }
+            Box(contentAlignment = Alignment.Center) {
+                CubeNet(
+                    size = size,
+                    faces = faces,
+                    palette = palette,
+                    onFace = { editingFace = it },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 18.dp)
+                )
             }
         }
 
+        Spacer(Modifier.height(10.dp))
+        ReviewStatus(report = report, message = message)
+
+        Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = onRescan,
+                modifier = Modifier.weight(.8f).height(50.dp),
+                shape = RoundedCornerShape(15.dp)
+            ) {
+                Text("RESCAN", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = onAccept,
+                enabled = report?.ok == true,
+                modifier = Modifier.weight(1.35f).height(50.dp),
+                shape = RoundedCornerShape(15.dp)
+            ) {
+                Text("OPEN 3D CUBE", fontWeight = FontWeight.Black)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun FaceEditScreen(
+    size: Int,
+    face: Face,
+    colors: List<Face>,
+    palette: Map<Face,RgbColor>,
+    onCell: (Int) -> Unit,
+    onRotate: () -> Unit,
+    onDone: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onDone, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 7.dp)) {
+                Text("‹  CUBE NET", color = InkSoft, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.weight(1f))
+            Text("EDIT ${face.symbol}", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Black)
+        }
+
+        Text("Correct ${face.symbol} face", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Black)
+        Text(
+            "Tap an incorrect sticker to cycle its color. The fixed center stays locked.",
+            color = Muted, fontSize = 12.sp, lineHeight = 16.sp
+        )
+
+        Spacer(Modifier.height(14.dp))
         Surface(
-            Modifier.fillMaxWidth().weight(1f), color = Panel, shape = RoundedCornerShape(22.dp),
+            Modifier.fillMaxWidth().weight(1f),
+            color = Panel,
+            shape = RoundedCornerShape(26.dp),
             border = BorderStroke(1.dp, Outline)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 FaceGrid(
-                    size, faces.getValue(selected), palette,
-                    Modifier.fillMaxWidth(if (size == 3) .66f else .76f).aspectRatio(1f)
-                ) { idx -> onCell(selected, idx) }
+                    size = size,
+                    colors = colors,
+                    palette = palette,
+                    modifier = Modifier
+                        .fillMaxWidth(if (size == 3) .82f else .90f)
+                        .aspectRatio(1f),
+                    onCell = onCell
+                )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onRotate(selected) }, modifier = Modifier.weight(1f)) {
-                Text("ROTATE ${selected.symbol} ↻", fontSize = 10.sp)
+            OutlinedButton(
+                onClick = onRotate,
+                modifier = Modifier.weight(1f).height(50.dp),
+                shape = RoundedCornerShape(15.dp)
+            ) {
+                Text("ROTATE ${face.symbol} ↻", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
-            OutlinedButton(onClick = onRescan, modifier = Modifier.weight(1f)) { Text("RESCAN", fontSize = 10.sp) }
+            Button(
+                onClick = onDone,
+                modifier = Modifier.weight(1f).height(50.dp),
+                shape = RoundedCornerShape(15.dp)
+            ) {
+                Text("DONE", fontSize = 10.sp, fontWeight = FontWeight.Black)
+            }
         }
+        Spacer(Modifier.height(10.dp))
+    }
+}
 
-        Spacer(Modifier.height(8.dp))
-        val ok = report?.ok == true
-        Surface(
-            color = if (ok) SuccessSoft else DangerSoft,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, if (ok) Success.copy(alpha = .25f) else Danger.copy(alpha = .20f))
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 10.dp)) {
-                Text(if (ok) "STATE VALID" else "CHECK REQUIRED", color = if (ok) Success else Danger, fontWeight = FontWeight.Black, fontSize = 10.sp)
-                Text(report?.messages?.joinToString("\n") ?: "Validating…", color = InkSoft, fontSize = 10.sp, lineHeight = 13.sp)
-                message?.let { Text(it, color = Muted, fontSize = 9.sp) }
+@Composable
+private fun ReviewStatus(report: ValidationReport?, message: String?) {
+    val ok = report?.ok == true
+    val validating = report == null
+    val bg = when {
+        validating -> Panel2
+        ok -> SuccessSoft
+        else -> DangerSoft
+    }
+    val accent = when {
+        validating -> Muted
+        ok -> Success
+        else -> Danger
+    }
+    val title = when {
+        validating -> "VALIDATING…"
+        ok -> "STATE VALID"
+        else -> "CHECK REQUIRED"
+    }
+
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = .22f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 9.dp)) {
+            Text(title, color = accent, fontWeight = FontWeight.Black, fontSize = 10.sp)
+            if (!ok && !validating) {
+                Text(report?.messages?.joinToString("\n").orEmpty(), color = InkSoft, fontSize = 10.sp, lineHeight = 13.sp)
             }
+            message?.takeIf { !ok }?.let { Text(it, color = Muted, fontSize = 9.sp) }
         }
-        Spacer(Modifier.height(7.dp))
-        Button(onClick = onAccept, enabled = ok, modifier = Modifier.fillMaxWidth().height(51.dp), shape = RoundedCornerShape(15.dp)) {
-            Text("OPEN 3D CUBE", fontWeight = FontWeight.Black)
-        }
-        Spacer(Modifier.height(9.dp))
     }
 }
 
@@ -114,29 +211,29 @@ private fun CubeNet(
     size: Int,
     faces: Map<Face,List<Face>>,
     palette: Map<Face,RgbColor>,
-    onCell: (Face,Int) -> Unit,
+    onFace: (Face) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val faceSize: Dp = if (size == 3) 72.dp else 76.dp
-    val gap = 3.dp
+    val faceSize: Dp = if (size == 3) 78.dp else 80.dp
+    val gap = 4.dp
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             Spacer(Modifier.size(faceSize))
-            NetFace(Face.U, faceSize, size, faces, palette, onCell)
+            NetFace(Face.U, faceSize, size, faces, palette, onFace)
             Spacer(Modifier.size(faceSize))
             Spacer(Modifier.size(faceSize))
         }
         Spacer(Modifier.height(gap))
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            NetFace(Face.L, faceSize, size, faces, palette, onCell)
-            NetFace(Face.F, faceSize, size, faces, palette, onCell)
-            NetFace(Face.R, faceSize, size, faces, palette, onCell)
-            NetFace(Face.B, faceSize, size, faces, palette, onCell)
+            NetFace(Face.L, faceSize, size, faces, palette, onFace)
+            NetFace(Face.F, faceSize, size, faces, palette, onFace)
+            NetFace(Face.R, faceSize, size, faces, palette, onFace)
+            NetFace(Face.B, faceSize, size, faces, palette, onFace)
         }
         Spacer(Modifier.height(gap))
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             Spacer(Modifier.size(faceSize))
-            NetFace(Face.D, faceSize, size, faces, palette, onCell)
+            NetFace(Face.D, faceSize, size, faces, palette, onFace)
             Spacer(Modifier.size(faceSize))
             Spacer(Modifier.size(faceSize))
         }
@@ -150,17 +247,32 @@ private fun NetFace(
     size: Int,
     faces: Map<Face,List<Face>>,
     palette: Map<Face,RgbColor>,
-    onCell: (Face,Int) -> Unit
+    onFace: (Face) -> Unit
 ) {
     Box(
-        Modifier.size(side).border(1.dp, Outline, RoundedCornerShape(6.dp)).padding(2.dp),
+        Modifier
+            .size(side)
+            .border(1.dp, Outline, RoundedCornerShape(7.dp))
+            .clickable { onFace(face) }
+            .padding(2.dp),
         contentAlignment = Alignment.Center
     ) {
-        FaceGrid(size, faces.getValue(face), palette, Modifier.fillMaxSize()) { idx -> onCell(face, idx) }
+        FaceGrid(
+            size = size,
+            colors = faces.getValue(face),
+            palette = palette,
+            modifier = Modifier.fillMaxSize(),
+            onCell = { onFace(face) }
+        )
         Text(
             face.symbol.toString(),
-            modifier = Modifier.align(Alignment.TopStart).background(Panel.copy(alpha=.82f), RoundedCornerShape(4.dp)).padding(horizontal=3.dp),
-            color = Ink, fontSize = 8.sp, fontWeight = FontWeight.Black
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .background(Panel.copy(alpha = .86f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 3.dp),
+            color = Ink,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Black
         )
     }
 }
