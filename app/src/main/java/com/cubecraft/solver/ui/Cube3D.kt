@@ -143,6 +143,88 @@ fun Cube3D(
             drawPath(path,p.color)
             drawPath(path,p.stroke,style=Stroke(p.strokeWidth))
         }
+
+        // Explicit directional guide. The ghost motion shows the layer moving; this arrow removes
+        // any ambiguity about clockwise vs counter-clockwise when the cube is viewed obliquely.
+        highlight?.let { move ->
+            fun faceNormal(face: Face): V3 = when(face) {
+                Face.F -> V3(0f,0f,1f)
+                Face.B -> V3(0f,0f,-1f)
+                Face.U -> V3(0f,1f,0f)
+                Face.D -> V3(0f,-1f,0f)
+                Face.R -> V3(1f,0f,0f)
+                Face.L -> V3(-1f,0f,0f)
+            }
+            fun facePoint(face: Face, u: Float, v: Float, outward: Float = .565f): V3 = when(face) {
+                // u = right and v = up while looking straight at the named face from outside.
+                Face.F -> V3(u, v, outward)
+                Face.B -> V3(-u, v, -outward)
+                Face.U -> V3(u, outward, -v)
+                Face.D -> V3(u, -outward, v)
+                Face.R -> V3(outward, v, -u)
+                Face.L -> V3(-outward, v, u)
+            }
+            fun drawHead(from: Offset, tip: Offset) {
+                val a = atan2(tip.y-from.y, tip.x-from.x)
+                val len = 18f
+                val wing = .62f
+                val left = Offset(tip.x-len*cos(a-wing), tip.y-len*sin(a-wing))
+                val right = Offset(tip.x-len*cos(a+wing), tip.y-len*sin(a+wing))
+                val head = Path().apply {
+                    moveTo(tip.x,tip.y)
+                    lineTo(left.x,left.y)
+                    lineTo(right.x,right.y)
+                    close()
+                }
+                drawPath(head, Color.White.copy(alpha=.95f))
+                val innerLen = 14f
+                val il = Offset(tip.x-innerLen*cos(a-wing), tip.y-innerLen*sin(a-wing))
+                val ir = Offset(tip.x-innerLen*cos(a+wing), tip.y-innerLen*sin(a+wing))
+                val inner = Path().apply {
+                    moveTo(tip.x,tip.y)
+                    lineTo(il.x,il.y)
+                    lineTo(ir.x,ir.y)
+                    close()
+                }
+                drawPath(inner, Accent)
+            }
+
+            if (camera(faceNormal(move.face)).z > -.05f) {
+                val clockwise = move.quarterTurns != 3
+                val startDeg = if (clockwise) 205f else -25f
+                val sweepDeg = if (clockwise) -230f else 230f
+                val radius = .37f + .015f*pulse
+                val samples = 34
+                val points = List(samples) { i ->
+                    val t = i.toFloat()/(samples-1)
+                    val deg = startDeg + sweepDeg*t
+                    val rad = Math.toRadians(deg.toDouble()).toFloat()
+                    project(camera(facePoint(move.face, radius*cos(rad), radius*sin(rad))))
+                }
+                val arrowPath = Path().apply {
+                    moveTo(points.first().x,points.first().y)
+                    points.drop(1).forEach { lineTo(it.x,it.y) }
+                }
+                drawPath(
+                    arrowPath,
+                    Color.White.copy(alpha=.92f),
+                    style=Stroke(width=12f,cap=StrokeCap.Round,join=StrokeJoin.Round)
+                )
+                drawPath(
+                    arrowPath,
+                    Accent,
+                    style=Stroke(width=6.5f,cap=StrokeCap.Round,join=StrokeJoin.Round)
+                )
+                drawHead(points[points.lastIndex-1], points.last())
+
+                // A half-turn has no meaningful CW/CCW distinction. A second small head makes
+                // the required 180-degree motion visually obvious without adding text over the cube.
+                if (move.quarterTurns == 2) {
+                    val mid = samples/2
+                    drawHead(points[mid-1], points[mid])
+                }
+            }
+        }
     }
 }
 
