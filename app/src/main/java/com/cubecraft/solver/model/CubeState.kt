@@ -1,7 +1,5 @@
 package com.cubecraft.solver.model
 
-import kotlin.math.max
-
 data class StickerKey(
     val x: Int, val y: Int, val z: Int,
     val nx: Int, val ny: Int, val nz: Int
@@ -14,7 +12,7 @@ data class VisibleSticker(val key: StickerKey, val color: Face)
  * scanning and solvers all read the same state. Supports 3x3 and 5x5, including wide turns.
  */
 class CubeState(val size: Int) {
-    init { require(size == 3 || size == 5) { "CUBECRAFT currently supports 3x3 and 5x5" } }
+    init { require(size == 3 || size == 5) { "cubikSolver currently supports 3x3 and 5x5" } }
     private val stickers = mutableMapOf<StickerKey, Face>()
 
     init { resetSolved() }
@@ -26,12 +24,31 @@ class CubeState(val size: Int) {
         }
     }
 
-    fun deepCopy(): CubeState = CubeState(size).also { it.loadFaces(snapshot()) }
+    /**
+     * Copy the exact internal sticker map instead of serializing through snapshot/loadFaces.
+     * A scanned cube may be unsolved and contain any legal color arrangement; cloning it should
+     * never re-validate or reinterpret that arrangement.
+     */
+    fun deepCopy(): CubeState {
+        val copy = CubeState(size)
+        copy.stickers.clear()
+        copy.stickers.putAll(stickers)
+        return copy
+    }
 
-    fun snapshot(): Map<Face, List<Face>> = Face.entries.associateWith(::faceColors)
+    fun snapshot(): Map<Face, List<Face>> =
+        Face.entries.associateWith { face -> faceColors(face) }
 
     fun loadFaces(faces: Map<Face, List<Face>>) {
-        require(Face.entries.all { faces[it]?.size == size * size })
+        val expected = size * size
+        val bad = Face.entries.filter { face -> faces[face]?.size != expected }
+        require(bad.isEmpty()) {
+            val details = Face.entries.joinToString { face ->
+                "${face.symbol}=${faces[face]?.size ?: 0}"
+            }
+            "Expected $expected stickers on every face, got $details"
+        }
+
         stickers.clear()
         for (face in Face.entries) {
             val values = faces.getValue(face)
@@ -39,10 +56,17 @@ class CubeState(val size: Int) {
                 stickers[keyFromFaceCell(face, r, c)] = values[r * size + c]
             }
         }
+
+        check(stickers.size == 6 * expected) {
+            "Internal cube geometry contains ${stickers.size} stickers, expected ${6 * expected}"
+        }
     }
 
     fun faceColors(face: Face): List<Face> = buildList(size * size) {
-        for (r in 0 until size) for (c in 0 until size) add(stickers.getValue(keyFromFaceCell(face, r, c)))
+        for (r in 0 until size) for (c in 0 until size) {
+            val key = keyFromFaceCell(face, r, c)
+            add(requireNotNull(stickers[key]) { "Missing sticker ${face.symbol}[$r,$c] at $key" })
+        }
     }
 
     fun visibleStickers(): List<VisibleSticker> = stickers.map { VisibleSticker(it.key, it.value) }
@@ -79,11 +103,12 @@ class CubeState(val size: Int) {
         for ((key, color) in stickers) {
             out[if (key.inSlab(face, width, size)) key.rotateClockwise(face, size) else key] = color
         }
-        stickers.clear(); stickers.putAll(out)
+        stickers.clear()
+        stickers.putAll(out)
     }
 
     fun toMin2PhaseString(): String {
-        require(size == 3)
+        require(size == 3) { "min2phase serialization expects a 3x3 cube" }
         return buildString(54) {
             listOf(Face.U, Face.R, Face.F, Face.D, Face.L, Face.B).forEach { face ->
                 faceColors(face).forEach { append(it.symbol) }
@@ -93,7 +118,7 @@ class CubeState(val size: Int) {
 
     /** Odd-cube fixed centers, corners and middle edge pieces form a legal 3x3 skeleton. */
     fun reducedSkeleton3x3(): CubeState {
-        require(size % 2 == 1)
+        require(size % 2 == 1) { "Reduced 3x3 skeleton requires an odd cube size" }
         if (size == 3) return deepCopy()
         val pick = listOf(0, size / 2, size - 1)
         val faces = Face.entries.associateWith { face ->
@@ -103,7 +128,8 @@ class CubeState(val size: Int) {
         return CubeState(3).also { it.loadFaces(faces) }
     }
 
-    fun colorCounts(): Map<Face, Int> = Face.entries.associateWith { face -> stickers.values.count { it == face } }
+    fun colorCounts(): Map<Face, Int> =
+        Face.entries.associateWith { face -> stickers.values.count { it == face } }
 
     fun keyFromFaceCell(face: Face, r: Int, c: Int): StickerKey = when (face) {
         Face.F -> StickerKey(c, size - 1 - r, size - 1, 0, 0, 1)
@@ -125,7 +151,6 @@ private fun StickerKey.inSlab(face: Face, width: Int, n: Int): Boolean = when (f
 }
 
 private fun StickerKey.rotateClockwise(face: Face, n: Int): StickerKey = when (face) {
-    // Sign is defined in world axes and chosen to match Singmaster clockwise as viewed at each face.
     Face.R -> rotX(-1, n)
     Face.L -> rotX(+1, n)
     Face.U -> rotY(-1, n)
