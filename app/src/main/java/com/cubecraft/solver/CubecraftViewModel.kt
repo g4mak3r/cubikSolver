@@ -317,8 +317,12 @@ class CubecraftViewModel : ViewModel() {
             redo.clear()
             clearSolution()
             screen = AppScreen.STUDIO
-            message = if (cubeSize == 3) "Analyzing a short verified 3x3 solution…" else null
-            if (cubeSize == 3) solve()
+            message = when (cubeSize) {
+                3 -> "Analyzing a short verified 3x3 solution…"
+                5 -> "Reducing the scanned 5x5 and building a verified solution…"
+                else -> null
+            }
+            if (cubeSize == 3 || cubeSize == 5) solve()
         } catch (t: Throwable) {
             screen = AppScreen.REVIEW
             message = "Could not open the 3D cube: ${t.message ?: t.javaClass.simpleName}"
@@ -415,7 +419,11 @@ class CubecraftViewModel : ViewModel() {
         solutionIndex = 0
         solutionStart = null
         solving = true
-        message = if (state.size == 3) "Analyzing a short verified 3x3 solution…" else null
+        message = when (state.size) {
+            3 -> "Analyzing a short verified 3x3 solution…"
+            5 -> "Reducing centers and pairing edges for a verified 5x5 solution…"
+            else -> "Analyzing cube…"
+        }
 
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
@@ -468,7 +476,7 @@ class CubecraftViewModel : ViewModel() {
         revision++
 
         message = if (target == solution.size) {
-            if (cube.isSolved()) "Solved preview - all ${solution.size} moves applied." else "Replay mismatch - reanalyze the scan."
+            if (cubeIsUniformSolved()) "Solved preview - all ${solution.size} moves applied." else "Replay mismatch - reanalyze the scan."
         } else {
             "Step ${target + 1} of ${solution.size}"
         }
@@ -478,6 +486,12 @@ class CubecraftViewModel : ViewModel() {
     fun solutionPrevious() = solutionSeek(solutionIndex - 1)
 
     fun clearMessage() { message = null }
+
+    private fun cubeIsUniformSolved(): Boolean =
+        Face.entries.all { face ->
+            val colors = cube.faceColors(face)
+            colors.isNotEmpty() && colors.all { it == colors[0] }
+        }
 
     private fun clearSolution() {
         solveRequestId++
