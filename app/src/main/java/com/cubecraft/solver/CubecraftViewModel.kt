@@ -194,26 +194,33 @@ class CubecraftViewModel : ViewModel() {
             }
         }
 
+        val orientationResult = if (cubeSize == 3) {
+            try { ThreeByThreeOrientationResolver.resolve(classified.faces) }
+            catch (_: Throwable) { null }
+        } else null
+        val resolvedFaces = orientationResult?.faces ?: classified.faces
+
         val builtCube = try {
-            require(Face.entries.all { classified.faces[it]?.size == cubeSize * cubeSize }) {
+            require(Face.entries.all { resolvedFaces[it]?.size == cubeSize * cubeSize }) {
                 "Classifier returned an incomplete cube"
             }
-            CubeState(cubeSize).also { it.loadFaces(classified.faces) }
+            CubeState(cubeSize).also { it.loadFaces(resolvedFaces) }
         } catch (t: Throwable) {
             message = "Could not build the cube: ${t.message ?: t.javaClass.simpleName}. Edit or rescan this face."
             screen = AppScreen.FACE_CONFIRM
             return false
         }
 
-        reviewFaces = classified.faces
+        reviewFaces = resolvedFaces
         palette = classified.palette
         cube = builtCube
         revision++
         validation = null
-        message = if (usedFallback) {
-            "Six faces captured. Review the fallback color map before continuing."
-        } else {
-            "Six faces captured · validating cube state…"
+        message = when {
+            usedFallback -> "Six faces captured. Review the fallback color map before continuing."
+            orientationResult?.verified == true && orientationResult.changed ->
+                "Six faces captured · scan orientation auto-corrected · validating…"
+            else -> "Six faces captured · validating cube state…"
         }
         screen = AppScreen.REVIEW
         validateReviewAsync()
