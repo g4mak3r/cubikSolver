@@ -29,7 +29,7 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
                 Text("OFFLINE · CAMERA SOLVER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
-            Text("0.5.5", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text("0.5.6", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(Modifier.height(28.dp))
