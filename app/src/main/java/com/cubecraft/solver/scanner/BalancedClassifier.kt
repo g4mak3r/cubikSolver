@@ -11,9 +11,7 @@ object BalancedClassifier {
     private data class Item(val capturedFace: Face, val cell: Int, val sample: ColorSample, val isCenter: Boolean)
 
     fun classify(captures: List<CapturedFace>, size: Int): ClassifiedScan {
-        require(captures.size == 6)
-        val byFace = captures.associateBy { it.face }
-        require(Face.entries.all { byFace[it]?.samples?.size == size * size })
+        val byFace = validatedCaptures(captures, size)
         val center = size * size / 2
         val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
         val palette = refs.mapValues { it.value.rgb }
@@ -27,7 +25,8 @@ object BalancedClassifier {
         val targets = buildList { Face.entries.forEach { f -> repeat(size * size) { add(f) } } }
         val n = items.size
         val costs = Array(n) { i -> DoubleArray(n) { j ->
-            val item = items[i]; val target = targets[j]
+            val item = items[i]
+            val target = targets[j]
             if (item.isCenter && target != item.capturedFace) 100_000.0
             else cubeColorDistance(item.sample, refs.getValue(target))
         } }
@@ -40,6 +39,49 @@ object BalancedClassifier {
             sum += costs[i][assignment[i]]
         }
         return ClassifiedScan(perFace.mapValues { it.value.toList() }, palette, sum / n)
+    }
+
+    /**
+     * Fail-safe path used only if balanced assignment itself throws.
+     * It still calibrates against the six captured centers, but classifies each sticker
+     * independently. Counts may therefore be imperfect; ReviewScreen + CubeValidator will show
+     * that to the user instead of silently throwing them back into another six-face scan.
+     */
+    fun classifyNearest(captures: List<CapturedFace>, size: Int): ClassifiedScan {
+        val byFace = validatedCaptures(captures, size)
+        val center = size * size / 2
+        val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
+        val palette = refs.mapValues { it.value.rgb }
+        var sum = 0.0
+        var count = 0
+
+        val perFace = Face.entries.associateWith { capturedFace ->
+            byFace.getValue(capturedFace).rotatedSamples(size).mapIndexed { idx, sample ->
+                val chosen = if (idx == center) {
+                    capturedFace
+                } else {
+                    Face.entries.minBy { target -> cubeColorDistance(sample, refs.getValue(target)) }
+                }
+                sum += cubeColorDistance(sample, refs.getValue(chosen))
+                count++
+                chosen
+            }
+        }
+        return ClassifiedScan(perFace, palette, if (count == 0) 0.0 else sum / count)
+    }
+
+    private fun validatedCaptures(captures: List<CapturedFace>, size: Int): Map<Face, CapturedFace> {
+        require(size == 3 || size == 5) { "Unsupported cube size: $size" }
+        val byFace = captures.associateBy { it.face }
+        val missing = Face.entries.filter { byFace[it] == null }
+        require(missing.isEmpty()) {
+            "Missing captured faces: ${missing.joinToString { it.symbol.toString() }}"
+        }
+        val bad = Face.entries.filter { byFace.getValue(it).samples.size != size * size }
+        require(bad.isEmpty()) {
+            "Wrong sticker count on: ${bad.joinToString { it.symbol.toString() }}"
+        }
+        return byFace
     }
 
     // O(n^3) Hungarian algorithm, 1-indexed internally. n <= 150 for 5x5.
