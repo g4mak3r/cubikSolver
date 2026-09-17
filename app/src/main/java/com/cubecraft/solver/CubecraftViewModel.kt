@@ -240,15 +240,30 @@ class CubecraftViewModel : ViewModel() {
         refreshReviewValidation()
     }
 
+    /** Set one reviewed sticker explicitly instead of forcing the user to cycle through colors. */
+    fun setReviewStickerColor(face: Face, index: Int, color: Face) {
+        val n = cubeSize
+        val center = n * n / 2
+        if (index == center) {
+            message = "The fixed center defines this face and cannot be recolored."
+            return
+        }
+        if (index !in 0 until n * n) return
+        val all = reviewFaces ?: return
+        val list = all.getValue(face).toMutableList()
+        if (list[index] == color) return
+        list[index] = color
+        reviewFaces = all.toMutableMap().apply { put(face, list) }
+        refreshReviewValidation()
+    }
+
+    /** Legacy convenience for older UI paths. */
     fun cycleReviewSticker(face: Face, index: Int) {
         val n = cubeSize
         if (index == n*n/2) return
         val all = reviewFaces ?: return
-        val list = all.getValue(face).toMutableList()
-        val cur = list[index]
-        list[index] = Face.entries[(cur.ordinal + 1) % Face.entries.size]
-        reviewFaces = all.toMutableMap().apply { put(face, list) }
-        refreshReviewValidation()
+        val current = all.getValue(face)[index]
+        setReviewStickerColor(face, index, Face.entries[(current.ordinal + 1) % Face.entries.size])
     }
 
     private fun refreshReviewValidation() {
