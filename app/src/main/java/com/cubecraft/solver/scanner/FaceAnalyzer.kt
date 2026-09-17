@@ -266,34 +266,37 @@ class FaceAnalyzer(
         return SampleBatch(samples, confidences, live)
     }
 
-    /** A live hint only. Final six-color classification still uses the six scanned centers. */
+    /**
+     * Live hint only. The final scan still uses the six captured centers + balanced assignment.
+     * Thresholds are intentionally biased against the common phone-camera failure where warm white
+     * is shown as yellow. Bright flame-orange and bright red are separated mainly by hue.
+     */
     private fun provisionalGuess(rgb: RgbColor): Pair<StickerGuess, Double> {
-        val r = rgb.r / 255.0; val g = rgb.g / 255.0; val b = rgb.b / 255.0
-        val mx = max(r, max(g, b)); val mn = min(r, min(g, b)); val d = mx - mn
-        val sat = if (mx <= 1e-6) 0.0 else d / mx
-        if (sat < .20 && mx > .47) {
-            return StickerGuess.WHITE to ((1.0 - sat / .25) * .85 + .15).coerceIn(.25, 1.0)
-        }
-        var hue = when {
-            d < 1e-6 -> 0.0
-            mx == r -> 60.0 * (((g-b)/d) % 6.0)
-            mx == g -> 60.0 * (((b-r)/d) + 2.0)
-            else -> 60.0 * (((r-g)/d) + 4.0)
-        }
-        if (hue < 0) hue += 360.0
+        val f = rgb.features()
 
-        val (guess, center, halfWidth) = when {
-            hue < 14 || hue >= 346 -> Triple(StickerGuess.RED, if (hue < 14) 0.0 else 360.0, 20.0)
-            hue < 42 -> Triple(StickerGuess.ORANGE, 28.0, 20.0)
-            hue < 78 -> Triple(StickerGuess.YELLOW, 60.0, 24.0)
-            hue < 175 -> Triple(StickerGuess.GREEN, 126.0, 56.0)
-            hue < 270 -> Triple(StickerGuess.BLUE, 220.0, 55.0)
-            else -> Triple(StickerGuess.RED, 330.0, 40.0)
+        // Warm white can easily sit around S=.20-.30 on phone auto-WB. Yellow cube plastic is
+        // normally much more chromatic, so keep a generous neutral-white corridor.
+        if (f.value > .50 && f.saturation < .32) {
+            val neutral = (1.0 - f.saturation / .36).coerceIn(.25, 1.0)
+            val bright = ((f.value - .42) / .42).coerceIn(.25, 1.0)
+            return StickerGuess.WHITE to (.72 * neutral + .28 * bright).coerceIn(.25, 1.0)
         }
-        val hueDistance = min(abs(hue-center), 360.0-abs(hue-center))
+
+        val hue = f.hue
+        val (guess, center, halfWidth) = when {
+            // Bright modern cube reds are often slightly orange-shifted; keep red narrow enough
+            // that a flame orange around 18-35 degrees still lands in ORANGE.
+            hue < 11 || hue >= 348 -> Triple(StickerGuess.RED, if (hue < 11) 0.0 else 360.0, 18.0)
+            hue < 43 -> Triple(StickerGuess.ORANGE, 27.0, 21.0)
+            hue < 82 -> Triple(StickerGuess.YELLOW, 60.0, 25.0)
+            hue < 174 -> Triple(StickerGuess.GREEN, 126.0, 55.0)
+            hue < 272 -> Triple(StickerGuess.BLUE, 220.0, 55.0)
+            else -> Triple(StickerGuess.RED, 330.0, 42.0)
+        }
+        val hueDistance = circularHueDistance(hue, center)
         val hueConfidence = (1.0 - hueDistance / max(halfWidth, 1.0)).coerceIn(.15, 1.0)
-        val satConfidence = ((sat - .12) / .55).coerceIn(.15, 1.0)
-        return guess to (.62 * hueConfidence + .38 * satConfidence).coerceIn(.15, 1.0)
+        val satConfidence = ((f.saturation - .18) / .52).coerceIn(.15, 1.0)
+        return guess to (.68 * hueConfidence + .32 * satConfidence).coerceIn(.15, 1.0)
     }
 
     private fun yuv420ToRgba(image: ImageProxy): Mat {

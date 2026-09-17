@@ -47,6 +47,24 @@ class CubeState(val size: Int) {
 
     fun visibleStickers(): List<VisibleSticker> = stickers.map { VisibleSticker(it.key, it.value) }
 
+    fun stickerColor(key: StickerKey): Face? = stickers[key]
+
+    fun setStickerColor(key: StickerKey, color: Face): Boolean {
+        if (!stickers.containsKey(key)) return false
+        stickers[key] = color
+        return true
+    }
+
+    fun isFixedCenter(key: StickerKey): Boolean {
+        val m = size / 2
+        return when {
+            key.nx != 0 -> key.y == m && key.z == m
+            key.ny != 0 -> key.x == m && key.z == m
+            key.nz != 0 -> key.x == m && key.y == m
+            else -> false
+        }
+    }
+
     fun isSolved(): Boolean = Face.entries.all { f -> faceColors(f).all { it == f } }
 
     fun apply(move: Move) {

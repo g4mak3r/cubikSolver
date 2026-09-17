@@ -20,6 +20,8 @@ class CubecraftViewModel : ViewModel() {
     var palette by mutableStateOf<Map<Face,RgbColor>>(emptyMap()); private set
     var scanIndex by mutableIntStateOf(0); private set
     var scanQuality by mutableFloatStateOf(0f); private set
+    var frontCenterGuess by mutableStateOf<StickerGuess?>(null); private set
+    var frontCenterRgb by mutableStateOf<RgbColor?>(null); private set
     var reviewFaces by mutableStateOf<Map<Face,List<Face>>?>(null); private set
     var validation by mutableStateOf<ValidationReport?>(null); private set
     var message by mutableStateOf<String?>(null); private set
@@ -34,7 +36,11 @@ class CubecraftViewModel : ViewModel() {
     private var originSolved=true
     private val three=Min2PhaseSolver(); private val five=FiveByFiveSolver(); private val validator=CubeValidator(three)
 
-    val currentPose: ScanPose get() = scanSequence[scanIndex.coerceIn(0,5)]
+    val currentPose: ScanPose get() {
+        val base = scanSequence[scanIndex.coerceIn(0,5)]
+        val label = frontCenterGuess?.label?.takeIf { it != "?" } ?: "saved FRONT"
+        return base.copy(instruction = base.instruction.replace("{FRONT_CENTER}", label))
+    }
     val currentGuideMove: Move? get() = solution.getOrNull(solutionIndex)
     val moveHistory: List<Move> get() = history.toList()
     val hasBaseline: Boolean get() = baseline != null
@@ -45,12 +51,17 @@ class CubecraftViewModel : ViewModel() {
         history.clear(); redo.clear(); clearSolution(); screen=AppScreen.STUDIO; message=null
     }
     fun beginScan(size:Int) {
-        cubeSize=size; captures.clear(); scanIndex=0; scanQuality=0f; reviewFaces=null; validation=null
+        cubeSize=size; captures.clear(); scanIndex=0; scanQuality=0f; frontCenterGuess=null; frontCenterRgb=null; reviewFaces=null; validation=null
         clearSolution(); message=null; screen=AppScreen.SCAN
     }
     fun updateScanQuality(q:Float){ scanQuality=q }
     fun captureFace(observation:FaceObservation) {
         if(observation.samples.size != cubeSize*cubeSize) return
+        if (scanIndex == 0) {
+            val center = cubeSize * cubeSize / 2
+            frontCenterGuess = observation.stickers.getOrNull(center)?.guess
+            frontCenterRgb = observation.samples.getOrNull(center)?.rgb
+        }
         captures.removeAll { it.face==currentPose.face }
         captures += CapturedFace(currentPose.face, observation.samples, observation.quality)
         if(scanIndex<5) { scanIndex++; scanQuality=0f } else finishClassification()
@@ -105,6 +116,27 @@ class CubecraftViewModel : ViewModel() {
     }
     fun resetSolved() {
         cube.resetSolved(); history.clear(); redo.clear(); clearSolution(); originSolved=true; baseline=null; palette=emptyMap(); revision++
+    }
+
+    fun paintSticker(key: StickerKey, color: Face) {
+        if (cube.isFixedCenter(key)) {
+            message = "The fixed center defines this scanned color and cannot be repainted."
+            return
+        }
+        if (baseline != null && history.isNotEmpty()) {
+            message = "Return to the scanned state before editing sticker colors."
+            return
+        }
+        if (!cube.setStickerColor(key, color)) return
+        history.clear(); redo.clear(); clearSolution(); revision++
+        if (baseline != null) baseline = cube.snapshot()
+        val target = cubeSize * cubeSize
+        val bad = cube.colorCounts().filterValues { it != target }
+        message = if (bad.isEmpty()) {
+            "Color edit saved. Sticker counts are balanced."
+        } else {
+            "Color edit saved. Keep exactly $target stickers of each color before solving."
+        }
     }
 
     fun solve() {

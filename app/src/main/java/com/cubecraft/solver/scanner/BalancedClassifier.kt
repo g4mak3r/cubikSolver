@@ -29,7 +29,7 @@ object BalancedClassifier {
         val costs = Array(n) { i -> DoubleArray(n) { j ->
             val item = items[i]; val target = targets[j]
             if (item.isCenter && target != item.capturedFace) 100_000.0
-            else item.sample.lab.distance(refs.getValue(target).lab)
+            else cubeColorDistance(item.sample, refs.getValue(target))
         } }
         val assignment = hungarian(costs)
         val perFace = Face.entries.associateWith { face -> MutableList(size * size) { face } }
