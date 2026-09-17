@@ -9,13 +9,14 @@ import com.cubecraft.solver.model.StickerKey
  * Compact table-free reduction of a 5x5 whose outer 3x3 skeleton is already solved.
  *
  * Instead of shipping gigabytes of pruning tables, this engine generates a reusable bank of legal
- * commutators. Every macro fixes all 54 skeleton stickers point-for-point, so search only has to
- * arrange the remaining 96 stickers (48 movable centers + 48 wings). Search works on a 96-byte
+ * stabilizer moves. Every macro fixes all 54 skeleton stickers point-for-point, so search only has
+ * to arrange the remaining 96 stickers (48 movable centers + 48 wings). Search works on a 96-byte
  * state and scores a macro by touching only the destinations it actually moves.
  *
- * This is deliberately a non-optimal reduction solver: correctness and offline size matter more
- * than minimal move count. FiveByFiveSolver always replays the complete result on CubeState(5)
- * before exposing it to the UI.
+ * The bank contains pure inner-slice generators, their outer-turn conjugates, short commutators and
+ * verified parity candidates. This is deliberately a non-optimal reduction solver: correctness and
+ * offline size matter more than minimal move count. FiveByFiveSolver always replays the complete
+ * result on CubeState(5) before exposing it to the UI.
  */
 internal object FiveByFiveMacroReduction {
     data class Result(
@@ -41,7 +42,7 @@ internal object FiveByFiveMacroReduction {
         }
 
         if (macros.isEmpty()) {
-            return Result(emptyList(), 96, 0, 0, "commutator bank is empty")
+            return Result(emptyList(), 96, 0, 0, "stabilizer macro bank is empty")
         }
 
         var state = m.compactState(cubeWithSolvedSkeleton)
@@ -50,45 +51,42 @@ internal object FiveByFiveMacroReduction {
 
         val path = ArrayList<Int>()
         var applications = 0
-        val maxApplications = 260
+        val maxApplications = 300
 
         while (score > 0 && applications < maxApplications) {
             val direct = bestDirect(state, score)
             if (direct != null) {
                 state = macros[direct.index].apply(state)
                 score = direct.score
-                path += direct.index
+                path.add(direct.index)
                 applications++
                 continue
             }
 
-            // Near the end we intentionally look deeper. Commutator endgames often need one or two
+            // Near the end we intentionally look deeper. Stabilizer endgames often need one or two
             // setup macros that temporarily make the sticker-count score worse before it improves.
             val depth = when {
-                score <= 8 -> 6
-                score <= 18 -> 5
+                score <= 8 -> 7
+                score <= 18 -> 6
+                score <= 36 -> 5
                 else -> 4
             }
             val width = when {
-                score <= 8 -> 72
-                score <= 18 -> 56
+                score <= 8 -> 96
+                score <= 18 -> 72
+                score <= 36 -> 52
                 else -> 36
             }
             val escape = findEscape(state, score, depth, width) ?: break
             for (index in escape.path) {
                 state = macros[index].apply(state)
-                path += index
+                path.add(index)
                 applications++
             }
             score = m.mismatch(state)
         }
 
-        val moves = if (score == 0) {
-            simplify(path.flatMap { macros[it].moves })
-        } else {
-            emptyList()
-        }
-
+        val moves = if (score == 0) simplify(path.flatMap { macros[it].moves }) else emptyList()
         return Result(
             moves = moves,
             finalMismatch = score,
@@ -144,9 +142,9 @@ internal object FiveByFiveMacroReduction {
         seen[StateKey(start)] = target
 
         for (depth in 1..maxDepth) {
-            val expanded = ArrayList<BeamNode>(frontier.size * 16)
+            val expanded = ArrayList<BeamNode>(frontier.size * 18)
             for (node in frontier) {
-                val local = topCandidates(node.state, node.score, node.last, 18)
+                val local = topCandidates(node.state, node.score, node.last, 22)
                 for (candidate in local) {
                     val nextState = macros[candidate.index].apply(node.state)
                     val exact = model.mismatch(nextState)
@@ -158,7 +156,7 @@ internal object FiveByFiveMacroReduction {
                     val nextPath = node.path.copyOf(node.path.size + 1)
                     nextPath[nextPath.lastIndex] = candidate.index
                     if (exact < target) return Escape(nextPath, exact)
-                    expanded += BeamNode(nextState, exact, nextPath, candidate.index)
+                    expanded.add(BeamNode(nextState, exact, nextPath, candidate.index))
                 }
             }
             if (expanded.isEmpty()) return null
@@ -228,13 +226,27 @@ internal object FiveByFiveMacroReduction {
 
         for (innerFace in faces) {
             for (innerTurns in 1..3) {
-                val a = innerSlice(innerFace, innerTurns)
-                val aInv = inverseSequence(a)
+                val inner = innerSlice(innerFace, innerTurns)
+
+                // Pure inner slices already fix corners, fixed centers and middle edges. Their
+                // conjugates by outer turns are the natural generators of the 5x5 stabilizer after
+                // the 3x3 skeleton has been solved. Including them is essential: commutators alone
+                // cover only the derived subgroup and can miss otherwise trivial slice states.
+                for (setup in setups) {
+                    val generator = if (setup.isEmpty()) {
+                        inner
+                    } else {
+                        setup + inner + inverseSequence(setup)
+                    }
+                    addSeed(model, unique, generator)
+                }
+
+                val innerInverse = inverseSequence(inner)
                 for (outerFace in faces) {
                     if (axis(innerFace) == axis(outerFace)) continue
                     for (outerTurns in 1..3) {
-                        val b = listOf(Move(outerFace, 1, outerTurns))
-                        val commutator = a + b + aInv + inverseSequence(b)
+                        val outer = listOf(Move(outerFace, 1, outerTurns))
+                        val commutator = inner + outer + innerInverse + inverseSequence(outer)
                         for (setup in setups) {
                             val sequence = if (setup.isEmpty()) {
                                 commutator
@@ -272,7 +284,7 @@ internal object FiveByFiveMacroReduction {
         for (face in faces) for (turns in 1..3) {
             result.add(listOf(Move(face, 1, turns)))
         }
-        // Quarter-turn two-move setups spread the basic commutator over all center/wing locations.
+        // Quarter-turn two-move setups spread generators/commutators over all remainder locations.
         for (a in faces) for (at in listOf(1, 3)) {
             for (b in faces) for (bt in listOf(1, 3)) {
                 if (axis(a) != axis(b)) result.add(listOf(Move(a, 1, at), Move(b, 1, bt)))
