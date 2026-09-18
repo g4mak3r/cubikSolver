@@ -509,7 +509,7 @@ internal object FiveByFiveMacroReduction {
                         maxNodes = if (deep) 42_000 else 34_000,
                         budgetMillis = broadBudget
                     )
-                    if (!broad.isNullOrEmpty()) {
+                    if (broad != null && broad.isNotEmpty()) {
                         return simplify(broad.flatMap { preferred[it].moves })
                     }
 
@@ -524,7 +524,7 @@ internal object FiveByFiveMacroReduction {
                         beamWidth = if (deep) 224 else 288,
                         budgetMillis = beamBudget
                     )
-                    if (!indices.isNullOrEmpty()) {
+                    if (indices != null && indices.isNotEmpty()) {
                         return simplify(indices.flatMap { preferred[it].moves })
                     }
                 }
