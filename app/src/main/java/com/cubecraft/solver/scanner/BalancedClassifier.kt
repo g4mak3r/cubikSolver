@@ -20,7 +20,7 @@ object BalancedClassifier {
         val byFace = validatedCaptures(captures, size)
         val center = size * size / 2
         val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
-        val palette = refs.mapValues { it.value.rgb }
+        val palette = displayPalette(byFace, refs, size)
         val faceByRealColor = uniqueCenterColorMap(byFace, size)
 
         val items = buildList {
@@ -66,7 +66,7 @@ object BalancedClassifier {
         val byFace = validatedCaptures(captures, size)
         val center = size * size / 2
         val refs = Face.entries.associateWith { face -> byFace.getValue(face).rotatedSamples(size)[center] }
-        val palette = refs.mapValues { it.value.rgb }
+        val palette = displayPalette(byFace, refs, size)
         val faceByRealColor = uniqueCenterColorMap(byFace, size)
         var sum = 0.0
         var count = 0
@@ -96,6 +96,19 @@ object BalancedClassifier {
      * map each unique center label back to its logical face identity. Ambiguous/unknown center
      * labels simply disable hard forcing for that color instead of making classification crash.
      */
+    /** UI color is based on the accepted centre label, never its photographed shade. */
+    private fun displayPalette(
+        byFace: Map<Face, CapturedFace>,
+        refs: Map<Face, ColorSample>,
+        size: Int
+    ): Map<Face, RgbColor> {
+        val center = size * size / 2
+        return Face.entries.associateWith { face ->
+            val guess = byFace.getValue(face).rotatedGuesses(size).getOrElse(center) { StickerGuess.UNKNOWN }
+            if (guess == StickerGuess.UNKNOWN) refs.getValue(face).rgb else idealDisplayRgb(guess)
+        }
+    }
+
     private fun uniqueCenterColorMap(
         byFace: Map<Face, CapturedFace>,
         size: Int
