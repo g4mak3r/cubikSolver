@@ -106,17 +106,18 @@ class CubeState(val size: Int) {
         // A 5x5 needs three-layer wide turns as a compact way to express the physical middle
         // slice: 3Rw followed by Rw' is the isolated third layer. The 3x3 solver itself still emits
         // outer turns only.
-        val maxWidth = if (size == 5) 3 else 1
-        require(move.width <= maxWidth) { "Turn width ${move.width} is too large for ${size}x$size" }
-        repeat(move.quarterTurns) { quarterTurn(move.face, move.width) }
+        val maxSpan = if (size == 5) 3 else 1
+        require(move.width <= maxSpan)
+        require(move.depth + move.width - 1 <= size)
+        repeat(move.quarterTurns) { quarterTurn(move.face, move.width, move.depth) }
     }
 
     fun applyAll(moves: Iterable<Move>) = moves.forEach(::apply)
 
-    private fun quarterTurn(face: Face, width: Int) {
+    private fun quarterTurn(face: Face, width: Int, depth: Int) {
         val out = mutableMapOf<StickerKey, Face>()
         for ((key, color) in stickers) {
-            out[if (key.inSlab(face, width, size)) key.rotateClockwise(face, size) else key] = color
+            out[if (key.inSlab(face, width, depth, size)) key.rotateClockwise(face, size) else key] = color
         }
         stickers.clear()
         stickers.putAll(out)
@@ -168,13 +169,17 @@ class CubeState(val size: Int) {
     }
 }
 
-private fun StickerKey.inSlab(face: Face, width: Int, n: Int): Boolean = when (face) {
-    Face.R -> x >= n - width
-    Face.L -> x < width
-    Face.U -> y >= n - width
-    Face.D -> y < width
-    Face.F -> z >= n - width
-    Face.B -> z < width
+private fun StickerKey.inSlab(face: Face, width: Int, depth: Int, n: Int): Boolean {
+    val low = depth - 1
+    val high = depth + width - 2
+    return when (face) {
+        Face.R -> x in (n - 1 - high)..(n - 1 - low)
+        Face.L -> x in low..high
+        Face.U -> y in (n - 1 - high)..(n - 1 - low)
+        Face.D -> y in low..high
+        Face.F -> z in (n - 1 - high)..(n - 1 - low)
+        Face.B -> z in low..high
+    }
 }
 
 private fun StickerKey.rotateClockwise(face: Face, n: Int): StickerKey = when (face) {
