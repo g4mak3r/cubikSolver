@@ -283,3 +283,48 @@ Java_com_cubecraft_solver_solver_NativeFiveByFiveKernel_findBestWrappedNative(
         (static_cast<jlong>(result.wrapper & 0xFFFFFF) << 24) |
         static_cast<jlong>(result.index & 0xFFFFFF);
 }
+
+extern "C"
+JNIEXPORT jintArray JNICALL
+Java_com_cubecraft_solver_solver_NativeFiveByFiveKernel_beamSearchNative(
+    JNIEnv* env,
+    jobject,
+    jlong handle,
+    jbyteArray stateArray,
+    jint mode,
+    jint target,
+    jint floor,
+    jboolean requireCenters,
+    jint maxDepth,
+    jint beamWidth,
+    jint budgetMillis
+) {
+    auto* pool = reinterpret_cast<Pool*>(handle);
+    if (pool == nullptr) return nullptr;
+
+    std::array<std::uint8_t, cubik555::kFacelets> state{};
+    if (!readState(env, stateArray, state)) return nullptr;
+
+    const auto path = cubik555::beamSearch(
+        *pool,
+        state.data(),
+        modeFrom(mode),
+        target,
+        floor,
+        requireCenters == JNI_TRUE,
+        maxDepth,
+        beamWidth,
+        budgetMillis
+    );
+    if (path.empty()) return nullptr;
+
+    auto result = env->NewIntArray(static_cast<jsize>(path.size()));
+    if (result == nullptr) return nullptr;
+    env->SetIntArrayRegion(
+        result,
+        0,
+        static_cast<jsize>(path.size()),
+        reinterpret_cast<const jint*>(path.data())
+    );
+    return result;
+}

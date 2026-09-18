@@ -39,14 +39,14 @@ class FiveByFiveSolver(
         var work = state.deepCopy()
         val allMoves = ArrayList<Move>()
         val deadline = if (NativeFiveByFiveKernel.available) {
-            System.currentTimeMillis() + 15_000L
+            System.currentTimeMillis() + 25_000L
         } else {
             Long.MAX_VALUE
         }
 
         for (pass in 0 until 4) {
             if (System.currentTimeMillis() >= deadline) {
-                return SolverResult.Unavailable("5x5 fast reduction time limit reached")
+                return SolverResult.Unavailable("5x5 native reduction time limit reached")
             }
             val reduction = reduceWithRestarts(work, pass, deadline)
                 ?: return SolverResult.Unavailable(lastReductionFailure)

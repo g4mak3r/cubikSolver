@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <map>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -292,6 +294,102 @@ WrappedEvalResult findBestWrapped(
         }
     }
     return best;
+}
+
+
+std::vector<int> beamSearch(
+    const Pool& pool,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int target,
+    int floor,
+    bool requireCenters,
+    int maxDepth,
+    int beamWidth,
+    int budgetMillis
+) {
+    if (pool.count <= 0 || maxDepth <= 0 || beamWidth <= 0) return {};
+
+    using Clock = std::chrono::steady_clock;
+    const auto deadline = Clock::now() + std::chrono::milliseconds(std::max(1, budgetMillis));
+
+    struct Node {
+        std::array<std::uint8_t, kFacelets> state{};
+        std::vector<int> path;
+        int value = -1;
+    };
+
+    auto hashState = [](const std::array<std::uint8_t, kFacelets>& s) {
+        std::uint64_t h = 1469598103934665603ull;
+        for (const auto value : s) {
+            h ^= static_cast<std::uint64_t>(value + 1u);
+            h *= 1099511628211ull;
+        }
+        return h;
+    };
+
+    Node root;
+    std::copy_n(state, kFacelets, root.state.data());
+    root.value = score(root.state.data(), mode);
+    const int initial = root.value;
+
+    std::vector<Node> frontier;
+    frontier.push_back(root);
+    std::vector<int> bestPath;
+    int bestScore = initial;
+
+    std::unordered_set<std::uint64_t> seen;
+    seen.reserve(static_cast<std::size_t>(beamWidth) * pool.count * 2u);
+    seen.insert(hashState(root.state));
+
+    for (int depth = 0; depth < maxDepth && Clock::now() < deadline; ++depth) {
+        std::vector<Node> next;
+        next.reserve(static_cast<std::size_t>(beamWidth) * 8u);
+
+        for (const auto& node : frontier) {
+            for (int opIndex = 0; opIndex < pool.count; ++opIndex) {
+                if ((opIndex & 31) == 0 && Clock::now() >= deadline) break;
+
+                Node candidate;
+                applyPerm(node.state.data(), pool.perm(opIndex), candidate.state.data());
+                if (requireCenters && !centersSolved(candidate.state.data())) continue;
+
+                candidate.value = score(candidate.state.data(), mode);
+                if (candidate.value < floor) continue;
+
+                const auto hash = hashState(candidate.state);
+                if (!seen.insert(hash).second) continue;
+
+                candidate.path = node.path;
+                candidate.path.push_back(opIndex);
+
+                if (candidate.value >= target) return candidate.path;
+
+                if (candidate.value > bestScore) {
+                    bestScore = candidate.value;
+                    bestPath = candidate.path;
+                }
+                next.push_back(std::move(candidate));
+            }
+            if (Clock::now() >= deadline) break;
+        }
+
+        if (next.empty()) break;
+        const auto keep = std::min<std::size_t>(next.size(), static_cast<std::size_t>(beamWidth));
+        std::partial_sort(
+            next.begin(),
+            next.begin() + keep,
+            next.end(),
+            [](const Node& a, const Node& b) {
+                if (a.value != b.value) return a.value > b.value;
+                return a.path.size() < b.path.size();
+            }
+        );
+        next.resize(keep);
+        frontier = std::move(next);
+    }
+
+    return bestScore > initial ? bestPath : std::vector<int>{};
 }
 
 }

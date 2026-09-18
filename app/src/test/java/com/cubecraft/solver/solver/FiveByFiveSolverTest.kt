@@ -39,7 +39,6 @@ class FiveByFiveSolverTest {
         // Deliberately do not pass the scramble/history to the solver. Its only input is the final
         // 150-sticker state, matching a camera scan.
         val result = solver.solve(scannedState.deepCopy())
-        println("5x5 test $scramble -> $result")
         assertTrue("$scramble -> $result", result is SolverResult.Success)
 
         val moves = (result as SolverResult.Success).moves
