@@ -34,7 +34,8 @@ jobs:
           /tmp/cubik555-test
 
       - name: Android NDK
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
 
       - name: Compile, unit tests and debug APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
