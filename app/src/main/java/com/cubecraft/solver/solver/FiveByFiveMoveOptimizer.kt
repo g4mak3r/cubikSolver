@@ -68,11 +68,14 @@ internal object FiveByFiveMoveOptimizer {
             Axis.Z -> listOf(Face.B, Face.F)
         }
 
-        return buildList(18) {
+        return buildList {
             for (face in faces) {
-                for (width in 1..3) {
-                    for (turns in 1..3) {
-                        add(Move(face, width, turns))
+                for (depth in 1..5) {
+                    val maxWidth = minOf(3, 6 - depth)
+                    for (width in 1..maxWidth) {
+                        for (turns in 1..3) {
+                            add(Move(face, width, turns, depth))
+                        }
                     }
                 }
             }
@@ -101,12 +104,15 @@ internal object FiveByFiveMoveOptimizer {
         }
         val amount = ((if (positive) -1 else 1) * move.quarterTurns).mod(4)
 
+        val low = move.depth - 1
+        val high = move.depth + move.width - 2
+
         if (positive) {
-            for (layer in 5 - move.width until 5) {
+            for (layer in 5 - 1 - high..5 - 1 - low) {
                 values[layer] = (values[layer] + amount) and 3
             }
         } else {
-            for (layer in 0 until move.width) {
+            for (layer in low..high) {
                 values[layer] = (values[layer] + amount) and 3
             }
         }
