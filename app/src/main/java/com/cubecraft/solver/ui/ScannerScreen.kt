@@ -7,7 +7,10 @@ import android.graphics.Typeface
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.*
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -15,9 +18,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
-import androidx.compose.ui.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -32,69 +38,76 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.cubecraft.solver.scanner.*
+import com.cubecraft.solver.scanner.FaceAnalyzer
+import com.cubecraft.solver.scanner.FaceObservation
+import com.cubecraft.solver.scanner.NormalizedPoint
+import com.cubecraft.solver.scanner.ScanPose
+import com.cubecraft.solver.scanner.StickerGuess
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
-/**
- * Continuous scanner UI. Capture is never gated by contour recognition.
- * Tapping CAPTURE either uses the latest fresh analysis frame or queues the very next one.
- */
 @Composable
 fun ScannerScreen(
     gridSize: Int,
     pose: ScanPose,
     index: Int,
+    centerGuess: StickerGuess?,
     onQuality: (Float) -> Unit,
     onCapture: (FaceObservation) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var granted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
     }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
-
-    // IMPORTANT: this state is not keyed by pose. CameraPreview is intentionally long-lived.
-    // We clear it explicitly on step changes, while its callback is updated via rememberUpdatedState.
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        granted = it
+    }
     var latest by remember { mutableStateOf<FaceObservation?>(null) }
     var cameraError by remember { mutableStateOf<String?>(null) }
     var pendingCapture by remember { mutableStateOf(false) }
     var acceptFramesAfter by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
+    LaunchedEffect(Unit) {
+        if (!granted) launcher.launch(Manifest.permission.CAMERA)
+    }
     LaunchedEffect(index) {
-        // Prevent a stale frame from the previous face being captured immediately after advancing.
         latest = null
         pendingCapture = false
         acceptFramesAfter = System.currentTimeMillis() + 280L
         onQuality(0f)
     }
-    LaunchedEffect(latest) { onQuality(latest?.quality ?: 0f) }
+    LaunchedEffect(latest) {
+        onQuality(latest?.quality ?: 0f)
+    }
 
-    fun captureNowOrNextFrame() {
+    fun capture() {
         if (!granted || cameraError != null) return
-        val obs = latest
-        val fresh = obs != null && System.currentTimeMillis() - obs.timestampMs <= 900L
-        if (fresh) {
+        val observation = latest
+        if (observation != null && System.currentTimeMillis() - observation.timestampMs <= 900L) {
             pendingCapture = false
-            onCapture(obs!!)
+            onCapture(observation)
         } else {
-            // No disabled button and no recognition lock: the next analyzer frame completes the tap.
             pendingCapture = true
         }
     }
 
-    Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 18.dp)) {
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column(
+        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("← HOME", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "FACE " + (index + 1).toString().padStart(2, '0') + " / 06",
+                (index + 1).toString() + "/6",
                 color = Muted,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp
@@ -102,121 +115,120 @@ fun ScannerScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        Text(
-            pose.title.uppercase(),
-            color = Ink,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Text(
-            pose.instruction,
-            color = Muted,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
-            lineHeight = 14.sp,
-            maxLines = 2
-        )
 
-        Spacer(Modifier.height(12.dp))
+        if (index >= 4) {
+            Text(
+                "RETURN TO",
+                color = InkSoft,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(5.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (centerGuess != null && centerGuess != StickerGuess.UNKNOWN) {
+                    val rgb = idealRgbForGuess(centerGuess)
+                    Box(
+                        Modifier.size(14.dp)
+                            .background(Color(rgb.argb()), RoundedCornerShape(2.dp))
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        centerGuess.displayName + " CENTER",
+                        color = Color(rgb.argb()),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                } else {
+                    Text(
+                        "SAVED CENTER",
+                        color = Accent,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+            if (pose.instruction.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    pose.instruction,
+                    color = Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp
+                )
+            }
+        } else {
+            Text(
+                pose.title,
+                color = Ink,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = .7.sp
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(7.dp))
-                .background(Viewport).border(1.dp, InkSoft, RoundedCornerShape(7.dp))
+            Modifier.fillMaxWidth().aspectRatio(1f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Viewport)
+                .border(1.dp, Outline, RoundedCornerShape(6.dp))
         ) {
             if (granted) {
                 CameraPreview(
                     gridSize = gridSize,
-                    onObservation = { obs ->
-                        if (obs != null && obs.timestampMs >= acceptFramesAfter) {
-                            latest = obs
+                    onObservation = { observation ->
+                        if (observation != null && observation.timestampMs >= acceptFramesAfter) {
+                            latest = observation
                             if (pendingCapture) {
                                 pendingCapture = false
-                                onCapture(obs)
+                                onCapture(observation)
                             }
                         }
                     },
                     onError = { cameraError = it }
                 )
-                ScanArOverlay(gridSize, latest)
-
-                Text(
-                    when {
-                        pendingCapture -> "HOLD STILL / QUEUED"
-                        latest?.tracked == true -> "FACE LOCK"
-                        latest != null -> "GRID LIVE"
-                        else -> "CAMERA INIT"
-                    },
-                    modifier = Modifier.align(Alignment.TopStart)
-                        .padding(10.dp)
-                        .background(CameraChrome, RoundedCornerShape(3.dp))
-                        .padding(horizontal = 7.dp, vertical = 4.dp),
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                ScanOverlay(gridSize, latest)
             } else {
-                Column(
-                    Modifier.fillMaxSize().padding(28.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Button(
+                    onClick = { launcher.launch(Manifest.permission.CAMERA) },
+                    modifier = Modifier.align(Alignment.Center),
+                    shape = RoundedCornerShape(3.dp)
                 ) {
-                    Text("CAMERA PERMISSION", color = Color.White, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(10.dp))
-                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }, shape = RoundedCornerShape(4.dp)) {
-                        Text("ALLOW", fontFamily = FontFamily.Monospace)
-                    }
+                    Text("ALLOW CAMERA", fontFamily = FontFamily.Monospace)
                 }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-        val observation = latest
-        val uncertain = observation?.uncertainCount ?: 0
-        val statusColor = when {
-            cameraError != null -> Danger
-            observation?.tracked == true -> Success
-            observation != null -> Accent
-            else -> Muted
-        }
-        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(statusColor, RoundedCornerShape(1.dp)))
-            Spacer(Modifier.width(7.dp))
+        if (cameraError != null) {
+            Spacer(Modifier.height(8.dp))
             Text(
-                when {
-                    cameraError != null -> "CAMERA ERROR / " + cameraError
-                    pendingCapture -> "WAITING FOR FRAME"
-                    observation?.tracked == true -> "TRACKED"
-                    observation != null -> "GRID READY"
-                    else -> "STARTING"
-                },
-                color = if (cameraError != null) Danger else InkSoft,
+                cameraError.orEmpty(),
+                color = Danger,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 9.sp,
-                maxLines = 1
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                "Q " + ((observation?.quality ?: 0f) * 100).toInt() + "  /  ? " + uncertain,
-                color = Muted,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp
+                maxLines = 2
             )
         }
 
         Spacer(Modifier.weight(1f))
+
         Button(
-            onClick = { captureNowOrNextFrame() },
+            onClick = ::capture,
             enabled = granted && cameraError == null,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(5.dp)
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(3.dp)
         ) {
             Text(
-                if (pendingCapture) "CAPTURE QUEUED…" else "CAPTURE →",
+                if (pendingCapture) "HOLD" else "CAPTURE",
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
+                fontSize = 11.sp,
+                letterSpacing = 1.sp
             )
         }
         Spacer(Modifier.height(12.dp))
@@ -232,38 +244,44 @@ private fun CameraPreview(
     val lifecycle = LocalLifecycleOwner.current
     val executor = remember(gridSize) { Executors.newSingleThreadExecutor() }
     var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
-
-    // This is the critical multi-step fix. AndroidView.factory runs only once, so directly
-    // capturing the first lambda would keep writing into ScannerScreen's FACE 1 state forever.
     val observationCallback = rememberUpdatedState(onObservation)
     val errorCallback = rememberUpdatedState(onError)
 
     AndroidView(
-        factory = { ctx ->
-            PreviewView(ctx).apply {
+        factory = { context ->
+            PreviewView(context).apply {
                 scaleType = PreviewView.ScaleType.FILL_CENTER
                 implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 val view = this
-                val future = ProcessCameraProvider.getInstance(ctx)
+                val future = ProcessCameraProvider.getInstance(context)
                 future.addListener({
                     try {
-                        val p = future.get(); provider = p
-                        val preview = Preview.Builder().build().also { it.surfaceProvider = view.surfaceProvider }
+                        val cameraProvider = future.get()
+                        provider = cameraProvider
+                        val preview = Preview.Builder().build().also {
+                            it.surfaceProvider = view.surfaceProvider
+                        }
                         val analysis = ImageAnalysis.Builder()
                             .setTargetResolution(Size(640, 480))
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
-                        analysis.setAnalyzer(executor, FaceAnalyzer(gridSize) { obs ->
-                            view.post { observationCallback.value(obs) }
+                        analysis.setAnalyzer(executor, FaceAnalyzer(gridSize) { observation ->
+                            view.post { observationCallback.value(observation) }
                         })
-                        p.unbindAll()
-                        val camera = p.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                        cameraProvider.unbindAll()
+                        val camera = cameraProvider.bindToLifecycle(
+                            lifecycle,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            preview,
+                            analysis
+                        )
                         errorCallback.value(null)
-
-                        // Center metering is helpful on older Huawei camera stacks but is not a capture gate.
                         view.postDelayed({
                             if (view.width > 0 && view.height > 0) {
-                                val point = view.meteringPointFactory.createPoint(view.width / 2f, view.height / 2f)
+                                val point = view.meteringPointFactory.createPoint(
+                                    view.width / 2f,
+                                    view.height / 2f
+                                )
                                 val action = FocusMeteringAction.Builder(
                                     point,
                                     FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
@@ -271,15 +289,16 @@ private fun CameraPreview(
                                 camera.cameraControl.startFocusAndMetering(action)
                             }
                         }, 450)
-                    } catch (t: Throwable) {
+                    } catch (error: Throwable) {
                         observationCallback.value(null)
-                        errorCallback.value(t.message ?: "Unable to open the rear camera.")
+                        errorCallback.value(error.message ?: "CAMERA ERROR")
                     }
-                }, ContextCompat.getMainExecutor(ctx))
+                }, ContextCompat.getMainExecutor(context))
             }
         },
         modifier = Modifier.fillMaxSize()
     )
+
     DisposableEffect(Unit) {
         onDispose {
             provider?.unbindAll()
@@ -289,7 +308,7 @@ private fun CameraPreview(
 }
 
 @Composable
-private fun ScanArOverlay(n: Int, observation: FaceObservation?) {
+private fun ScanOverlay(n: Int, observation: FaceObservation?) {
     Canvas(Modifier.fillMaxSize()) {
         val frameW = observation?.frameWidth?.takeIf { it > 0 }?.toFloat() ?: 1f
         val frameH = observation?.frameHeight?.takeIf { it > 0 }?.toFloat() ?: 1f
@@ -297,86 +316,75 @@ private fun ScanArOverlay(n: Int, observation: FaceObservation?) {
         val cropX = (size.width - frameW * scale) / 2f
         val cropY = (size.height - frameH * scale) / 2f
 
-        fun map(p: NormalizedPoint): Offset = Offset(
-            cropX + p.x * frameW * scale,
-            cropY + p.y * frameH * scale
+        fun map(point: NormalizedPoint) = Offset(
+            cropX + point.x * frameW * scale,
+            cropY + point.y * frameH * scale
         )
 
-        // SOURCE OF TRUTH: this fixed square is always the actual capture/sample region.
-        // AR tracking may decorate the preview, but it is never allowed to resize this grid.
-        val guideSide = size.minDimension * .78f
-        val guideLeft = (size.width - guideSide) / 2f
-        val guideTop = (size.height - guideSide) / 2f
-        val guide = listOf(
-            Offset(guideLeft, guideTop), Offset(guideLeft + guideSide, guideTop),
-            Offset(guideLeft + guideSide, guideTop + guideSide), Offset(guideLeft, guideTop + guideSide)
+        val side = size.minDimension * .78f
+        val left = (size.width - side) / 2f
+        val top = (size.height - side) / 2f
+        val quad = listOf(
+            Offset(left, top),
+            Offset(left + side, top),
+            Offset(left + side, top + side),
+            Offset(left, top + side)
         )
-        val guideColor = Color.White.copy(alpha = .94f)
-        val guidePath = Path().apply {
-            moveTo(guide[0].x, guide[0].y)
-            lineTo(guide[1].x, guide[1].y)
-            lineTo(guide[2].x, guide[2].y)
-            lineTo(guide[3].x, guide[3].y)
+        val path = Path().apply {
+            moveTo(quad[0].x, quad[0].y)
+            lineTo(quad[1].x, quad[1].y)
+            lineTo(quad[2].x, quad[2].y)
+            lineTo(quad[3].x, quad[3].y)
             close()
         }
-        drawPath(guidePath, Color.Black.copy(alpha = .12f))
-        drawPath(guidePath, guideColor, style = Stroke(3.5f))
+        drawPath(path, Color.Black.copy(alpha = .14f))
+        drawPath(path, Color.White.copy(alpha = .86f), style = Stroke(2.5f))
 
-        // Fixed perspective-neutral NxN grid used for BOTH live colors and final Capture.
         for (i in 1 until n) {
             val t = i.toFloat() / n
-            val a = lerpOffset(guide[0], guide[1], t)
-            val b = lerpOffset(guide[3], guide[2], t)
-            drawLine(guideColor.copy(alpha = .48f), a, b, 2f)
-            val c = lerpOffset(guide[0], guide[3], t)
-            val d = lerpOffset(guide[1], guide[2], t)
-            drawLine(guideColor.copy(alpha = .48f), c, d, 2f)
+            drawLine(
+                Color.White.copy(alpha = .34f),
+                lerp(quad[0], quad[1], t),
+                lerp(quad[3], quad[2], t),
+                1.4f
+            )
+            drawLine(
+                Color.White.copy(alpha = .34f),
+                lerp(quad[0], quad[3], t),
+                lerp(quad[1], quad[2], t),
+                1.4f
+            )
         }
 
-        // Live sticker colors are deliberately placed on the fixed guide, because those are
-        // the exact cells sampled by FaceAnalyzer. This prevents visual/capture disagreement.
         val stickers = observation?.stickers.orEmpty()
         if (stickers.size == n * n) {
-            for (r in 0 until n) for (c in 0 until n) {
-                val idx = r * n + c
+            for (row in 0 until n) for (col in 0 until n) {
+                val idx = row * n + col
                 val sticker = stickers[idx]
-                val u0 = c.toFloat() / n; val u1 = (c + 1f) / n
-                val v0 = r.toFloat() / n; val v1 = (r + 1f) / n
-                val p00 = bilerp(guide, u0, v0); val p10 = bilerp(guide, u1, v0)
-                val p11 = bilerp(guide, u1, v1); val p01 = bilerp(guide, u0, v1)
+                val center = bilerp(quad, (col + .5f) / n, (row + .5f) / n)
+                val radius = side / n * if (n == 3) .11f else .12f
+                val display = idealRgbForGuess(sticker.guess)
+                val color = Color(display.argb())
 
-                if (sticker.confidence < .56f) {
-                    val warn = if (sticker.confidence < .38f) Color(0x66FF4D4F) else Color(0x55FFB020)
-                    val cellPath = Path().apply {
-                        moveTo(p00.x,p00.y); lineTo(p10.x,p10.y); lineTo(p11.x,p11.y); lineTo(p01.x,p01.y); close()
-                    }
-                    drawPath(cellPath, warn)
+                drawCircle(Color.Black.copy(alpha = .54f), radius + 3f, center)
+                drawCircle(color, radius, center)
+
+                if (sticker.confidence < .45f) {
+                    drawCircle(Danger, radius + 5f, center, style = Stroke(2.5f))
                 }
 
-                val center = bilerp(guide, (c + .5f) / n, (r + .5f) / n)
-                val cellWidth = (offsetDistance(p10, p00) + offsetDistance(p11, p01)) * .5f
-                val cellHeight = (offsetDistance(p01, p00) + offsetDistance(p11, p10)) * .5f
-                val radius = minOf(cellWidth, cellHeight) * if (n == 3) .16f else .19f
-                val displayRgb = idealRgbForGuess(sticker.guess)
-                val chipColor = Color(displayRgb.argb())
-                drawCircle(Color.Black.copy(alpha = .42f), radius + 3.5f, center)
-                drawCircle(chipColor.copy(alpha = .94f), radius, center)
-                if (sticker.confidence < .56f) {
-                    drawCircle(
-                        if (sticker.confidence < .38f) Color(0xFFFF5C5C) else Color(0xFFFFC247),
-                        radius + 5f,
-                        center,
-                        style = Stroke(3f)
-                    )
-                }
-
-                val luminance = (.2126 * displayRgb.r + .7152 * displayRgb.g + .0722 * displayRgb.b) / 255.0
+                val luminance =
+                    (.2126 * display.r + .7152 * display.g + .0722 * display.b) / 255.0
                 val paint = AndroidPaint().apply {
                     isAntiAlias = true
-                    color = if (luminance > .58) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                    this.color = if (luminance > .58) {
+                        android.graphics.Color.BLACK
+                    } else {
+                        android.graphics.Color.WHITE
+                    }
                     textAlign = AndroidPaint.Align.CENTER
-                    textSize = (radius * 1.18f).coerceAtLeast(10f)
-                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textSize = (radius * 1.12f).coerceAtLeast(9f)
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 }
                 drawContext.canvas.nativeCanvas.drawText(
                     sticker.guess.label,
@@ -387,42 +395,25 @@ private fun ScanArOverlay(n: Int, observation: FaceObservation?) {
             }
         }
 
-        // OPTIONAL AR ASSIST: only a macro-sized contour can reach FaceObservation.tracked.
-        // We draw an outer teal outline only. It never owns the NxN grid or Capture samples.
         if (observation?.tracked == true && observation.corners?.size == 4) {
-            val face = observation.corners.map(::map)
-            val arColor = Color(0xFF63E6BE)
-            val arPath = Path().apply {
-                moveTo(face[0].x, face[0].y)
-                lineTo(face[1].x, face[1].y)
-                lineTo(face[2].x, face[2].y)
-                lineTo(face[3].x, face[3].y)
+            val tracked = observation.corners.map(::map)
+            val trackedPath = Path().apply {
+                moveTo(tracked[0].x, tracked[0].y)
+                lineTo(tracked[1].x, tracked[1].y)
+                lineTo(tracked[2].x, tracked[2].y)
+                lineTo(tracked[3].x, tracked[3].y)
                 close()
             }
-            drawPath(arPath, arColor.copy(alpha = .14f))
-            drawPath(arPath, arColor, style = Stroke(5f))
-
-            val bracket = size.minDimension * .045f
-            face.forEachIndexed { i, p ->
-                val towardA = when (i) { 0, 3 -> 1f; else -> -1f }
-                val towardB = when (i) { 0, 1 -> 1f; else -> -1f }
-                drawLine(arColor, p, Offset(p.x + bracket * towardA, p.y), 6f)
-                drawLine(arColor, p, Offset(p.x, p.y + bracket * towardB), 6f)
-            }
+            drawPath(trackedPath, Accent.copy(alpha = .72f), style = Stroke(2f))
         }
     }
 }
 
-private fun offsetDistance(a: Offset, b: Offset): Float = kotlin.math.hypot(a.x - b.x, a.y - b.y)
+private fun lerp(a: Offset, b: Offset, t: Float) =
+    Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 
-private fun lerpOffset(a: Offset, b: Offset, t: Float) = Offset(
-    a.x + (b.x - a.x) * t,
-    a.y + (b.y - a.y) * t
-)
-
-/** quad order: TL, TR, BR, BL */
-private fun bilerp(q: List<Offset>, u: Float, v: Float): Offset {
-    val top = lerpOffset(q[0], q[1], u)
-    val bottom = lerpOffset(q[3], q[2], u)
-    return lerpOffset(top, bottom, v)
+private fun bilerp(quad: List<Offset>, u: Float, v: Float): Offset {
+    val top = lerp(quad[0], quad[1], u)
+    val bottom = lerp(quad[3], quad[2], u)
+    return lerp(top, bottom, v)
 }
