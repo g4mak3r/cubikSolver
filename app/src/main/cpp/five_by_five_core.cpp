@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 #include <map>
+#include <queue>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
@@ -390,6 +391,132 @@ std::vector<int> beamSearch(
     }
 
     return bestScore > initial ? bestPath : std::vector<int>{};
+}
+
+
+std::vector<int> bestFirstSearch(
+    const Pool& pool,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int target,
+    int floor,
+    bool requireCenters,
+    int maxNodes,
+    int budgetMillis
+) {
+    if (pool.count <= 0 || maxNodes <= 0) return {};
+
+    using Clock = std::chrono::steady_clock;
+    const auto deadline = Clock::now() + std::chrono::milliseconds(std::max(1, budgetMillis));
+
+    struct Node {
+        std::array<std::uint8_t, kFacelets> state{};
+        int value = -1;
+        int parent = -1;
+        int op = -1;
+        int depth = 0;
+    };
+    struct QueueItem {
+        int priority;
+        int value;
+        int depth;
+        int index;
+    };
+    struct Worse {
+        bool operator()(const QueueItem& a, const QueueItem& b) const {
+            if (a.priority != b.priority) return a.priority < b.priority;
+            if (a.value != b.value) return a.value < b.value;
+            return a.depth > b.depth;
+        }
+    };
+
+    auto hashState = [](const std::array<std::uint8_t, kFacelets>& s) {
+        std::uint64_t h = 1469598103934665603ull;
+        for (const auto value : s) {
+            h ^= static_cast<std::uint64_t>(value + 1u);
+            h *= 1099511628211ull;
+        }
+        return h;
+    };
+
+    auto buildPath = [](const std::vector<Node>& nodes, int index) {
+        std::vector<int> path;
+        while (index >= 0 && nodes[index].parent >= 0) {
+            path.push_back(nodes[index].op);
+            index = nodes[index].parent;
+        }
+        std::reverse(path.begin(), path.end());
+        return path;
+    };
+
+    std::vector<Node> nodes;
+    nodes.reserve(static_cast<std::size_t>(maxNodes));
+
+    Node root;
+    std::copy_n(state, kFacelets, root.state.data());
+    root.value = score(root.state.data(), mode);
+    const int initial = root.value;
+    nodes.push_back(root);
+
+    std::priority_queue<QueueItem, std::vector<QueueItem>, Worse> open;
+    open.push({root.value * 1024, root.value, 0, 0});
+
+    std::unordered_set<std::uint64_t> seen;
+    seen.reserve(static_cast<std::size_t>(maxNodes) * 2u);
+    seen.insert(hashState(root.state));
+
+    int bestIndex = 0;
+    int bestScore = initial;
+
+    while (!open.empty() &&
+           static_cast<int>(nodes.size()) < maxNodes &&
+           Clock::now() < deadline) {
+        const auto currentItem = open.top();
+        open.pop();
+        const Node current = nodes[currentItem.index];
+
+        for (int opIndex = 0; opIndex < pool.count; ++opIndex) {
+            if ((opIndex & 31) == 0 && Clock::now() >= deadline) break;
+            if (static_cast<int>(nodes.size()) >= maxNodes) break;
+
+            Node child;
+            applyPerm(current.state.data(), pool.perm(opIndex), child.state.data());
+            if (requireCenters && !centersSolved(child.state.data())) continue;
+
+            child.value = score(child.state.data(), mode);
+            if (child.value < floor) continue;
+
+            const auto hash = hashState(child.state);
+            if (!seen.insert(hash).second) continue;
+
+            child.parent = currentItem.index;
+            child.op = opIndex;
+            child.depth = current.depth + 1;
+
+            const int childIndex = static_cast<int>(nodes.size());
+            nodes.push_back(std::move(child));
+
+            if (nodes[childIndex].value >= target) {
+                return buildPath(nodes, childIndex);
+            }
+
+            if (nodes[childIndex].value > bestScore) {
+                bestScore = nodes[childIndex].value;
+                bestIndex = childIndex;
+            }
+
+            // Heuristic dominates, but depth still matters enough to prefer compact paths.
+            const int priority = nodes[childIndex].value * 1024 - nodes[childIndex].depth * 7;
+            open.push({
+                priority,
+                nodes[childIndex].value,
+                nodes[childIndex].depth,
+                childIndex
+            });
+        }
+    }
+
+    return bestScore > initial ? buildPath(nodes, bestIndex) : std::vector<int>{};
 }
 
 }

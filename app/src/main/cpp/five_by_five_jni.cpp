@@ -328,3 +328,46 @@ Java_com_cubecraft_solver_solver_NativeFiveByFiveKernel_beamSearchNative(
     );
     return result;
 }
+
+extern "C"
+JNIEXPORT jintArray JNICALL
+Java_com_cubecraft_solver_solver_NativeFiveByFiveKernel_bestFirstSearchNative(
+    JNIEnv* env,
+    jobject,
+    jlong handle,
+    jbyteArray stateArray,
+    jint mode,
+    jint target,
+    jint floor,
+    jboolean requireCenters,
+    jint maxNodes,
+    jint budgetMillis
+) {
+    auto* pool = reinterpret_cast<Pool*>(handle);
+    if (pool == nullptr) return nullptr;
+
+    std::array<std::uint8_t, cubik555::kFacelets> state{};
+    if (!readState(env, stateArray, state)) return nullptr;
+
+    const auto path = cubik555::bestFirstSearch(
+        *pool,
+        state.data(),
+        modeFrom(mode),
+        target,
+        floor,
+        requireCenters == JNI_TRUE,
+        maxNodes,
+        budgetMillis
+    );
+    if (path.empty()) return nullptr;
+
+    auto result = env->NewIntArray(static_cast<jsize>(path.size()));
+    if (result == nullptr) return nullptr;
+    env->SetIntArrayRegion(
+        result,
+        0,
+        static_cast<jsize>(path.size()),
+        reinterpret_cast<const jint*>(path.data())
+    );
+    return result;
+}

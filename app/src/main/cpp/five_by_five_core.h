@@ -107,4 +107,15 @@ std::vector<int> beamSearch(
     int budgetMillis
 );
 
+std::vector<int> bestFirstSearch(
+    const Pool& pool,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int target,
+    int floor,
+    bool requireCenters,
+    int maxNodes,
+    int budgetMillis
+);
+
 }
