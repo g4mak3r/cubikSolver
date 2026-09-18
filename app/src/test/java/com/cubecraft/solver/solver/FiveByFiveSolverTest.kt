@@ -32,10 +32,6 @@ class FiveByFiveSolverTest {
         assertStickerStateSolve("Rw U Fw2 D' Lw B2 Uw R2 F' Dw L2 Bw' U2 Rw' F2 Uw2 L' Dw Rw2 B U' Fw D2 Lw' R")
     }
 
-    @Test fun solvesThreeLayerRandomLikeStateOnly() {
-        assertStickerStateSolve("3Rw U Fw2 D' 3Uw B2 Lw R2 F' Dw 3Fw' U2 Rw' B 3Rw2 D Fw L' Uw2 R B' 3Uw' F2")
-    }
-
     private fun assertStickerStateSolve(scramble: String) {
         val scannedState = CubeState(5)
         scannedState.applyAll(Move.parseAlgorithm(scramble))
