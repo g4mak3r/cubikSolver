@@ -33,8 +33,8 @@ internal object FiveByFiveMacroReduction {
     private const val EDGE_TARGET = 24
 
     private const val STAGE_ATTEMPTS = 3
-    private const val MAX_STAGE_MOVES = 340
-    private const val MAX_STALLS = 72
+    private const val MAX_STAGE_MOVES = 520
+    private const val MAX_STALLS = 96
     private const val MAX_PASSES = 5
     private const val DEEP_WINDOW = 8
     private const val NARROW_SLICE = 260
@@ -84,6 +84,20 @@ internal object FiveByFiveMacroReduction {
         )
 
         private data class StageResult(val state: ByteArray, val moves: List<Move>)
+
+        /**
+         * Best verified progress reached by one local-search attempt.
+         *
+         * Older builds threw this state away unless the whole stage reached its target. On a real
+         * scan that meant repeatedly climbing from e.g. 29/54 centres to 52/54, discarding the
+         * useful 52/54 position, and starting the next basin from scratch.
+         */
+        private data class StageAttempt(
+            val state: ByteArray,
+            val moves: List<Move>,
+            val score: Int,
+            val solved: Boolean
+        )
 
         private val wrappersNone = listOf(Wrapper(emptyList(), null, null))
         private val wrappersOne: List<Wrapper> = wrappersNone + pool.wrapperAtoms.map { atom ->
@@ -174,14 +188,34 @@ internal object FiveByFiveMacroReduction {
             finishers: List<Operator>,
             deep: Boolean
         ): StageResult? {
-            var best = score(start)
+            var current = start.copyOf()
+            val accumulated = ArrayList<Move>()
+            var best = score(current)
+            var attemptsRun = 0
+
             for (attempt in 0 until STAGE_ATTEMPTS) {
                 if (outOfTime()) break
-                val result = attemptStage(start, target, score, legal, operators, finishers, deep)
-                if (result != null) return result
-                best = maxOf(best, lastAttemptBest)
+                attemptsRun++
+
+                val progress = attemptStage(
+                    current, target, score, legal, operators, finishers, deep
+                )
+
+                // Crucial: carry the best *state* into the next attempt instead of keeping only its
+                // numeric score. Equal-score plateau states are useful too because they expose a
+                // different arrangement to the randomized sideways search.
+                if (progress.score >= best && (progress.moves.isNotEmpty() || progress.solved)) {
+                    current = progress.state
+                    accumulated += progress.moves
+                    best = progress.score
+                }
+
+                if (progress.solved) {
+                    return StageResult(current, simplify(accumulated))
+                }
             }
-            lastStageReport = "$label reached $best of $target after $STAGE_ATTEMPTS attempts"
+
+            lastStageReport = "$label reached $best of $target after $attemptsRun attempts"
             return null
         }
 
@@ -193,16 +227,36 @@ internal object FiveByFiveMacroReduction {
             operators: List<Operator>,
             finishers: List<Operator>,
             deep: Boolean
-        ): StageResult? {
+        ): StageAttempt {
             var state = start.copyOf()
             val out = ArrayList<Move>()
             var best = score(state)
+            var bestState = state.copyOf()
+            var bestMoves: List<Move> = emptyList()
             lastAttemptBest = best
             var stalls = 0
 
+            fun snapshotBest(after: Int) {
+                if (!legal(state) || after < best) return
+                if (after > best) {
+                    best = after
+                    lastAttemptBest = best
+                    stalls = 0
+                }
+                // Keep the newest equal-score plateau as well. It is often a better launch point
+                // for the next attempt than the first position that happened to reach this score.
+                bestState = state.copyOf()
+                bestMoves = simplify(out.toList())
+            }
+
+            fun partial(): StageAttempt =
+                StageAttempt(bestState, bestMoves, best, solved = false)
+
             while (!outOfTime()) {
                 val before = score(state)
-                if (before >= target && legal(state)) return StageResult(state, simplify(out))
+                if (before >= target && legal(state)) {
+                    return StageAttempt(state, simplify(out), before, solved = true)
+                }
 
                 var step = shortSearch.find(state) { candidate ->
                     legal(candidate) && score(candidate) > before
@@ -210,12 +264,20 @@ internal object FiveByFiveMacroReduction {
                     legal(candidate) && score(candidate) > before
                 }
 
-                if (step == null && deep && before >= target - DEEP_WINDOW) {
+                // centreFine used to be built but never queried because the old code gated every
+                // finisher behind deep=true (which is only used by edge pairing). That is exactly
+                // where real scans tended to die at 51-53/54 centres. Use the dedicated tail pool
+                // for both stages once we are close to the target.
+                if (step == null && before >= target - DEEP_WINDOW && finishers.isNotEmpty()) {
                     step = findOperator(state, finishers, wrappersOne) { candidate ->
                         legal(candidate) && score(candidate) > before
-                    } ?: findOperator(state, narrowSlice(operators), wrappersTwo) { candidate ->
-                        legal(candidate) && score(candidate) > before
                     } ?: findOperator(state, narrowSlice(finishers), wrappersTwo) { candidate ->
+                        legal(candidate) && score(candidate) > before
+                    }
+                }
+
+                if (step == null && deep && before >= target - DEEP_WINDOW) {
+                    step = findOperator(state, narrowSlice(operators), wrappersTwo) { candidate ->
                         legal(candidate) && score(candidate) > before
                     }
                 }
@@ -228,29 +290,27 @@ internal object FiveByFiveMacroReduction {
                         else -> 2
                     }
                     step = bestSideways(state, operators, wrappersOne, before, allowance, legal, score)
+                        ?: bestSideways(state, finishers, wrappersOne, before, allowance, legal, score)
                         ?: bestSideways(state, operators, wrappersNone, before, allowance, legal, score)
                         ?: run {
                             lastAttemptBest = best
-                            return null
+                            return partial()
                         }
                 }
 
                 state = model.applyMoves(state, step)
                 out += step
                 val after = score(state)
-                if (after > best) {
-                    best = after
-                    lastAttemptBest = best
-                    stalls = 0
-                }
+                snapshotBest(after)
+
                 if (stalls > MAX_STALLS || out.size > MAX_STAGE_MOVES) {
                     lastAttemptBest = best
-                    return null
+                    return partial()
                 }
             }
 
             lastAttemptBest = best
-            return null
+            return partial()
         }
 
         private fun findOperator(
