@@ -83,7 +83,11 @@ internal object FiveByFiveMacroReduction {
             val undo: ShortArray?
         )
 
-        private data class StageResult(val state: ByteArray, val moves: List<Move>)
+        private data class StageResult(
+            val state: ByteArray,
+            val moves: List<Move>,
+            val solved: Boolean
+        )
 
         /**
          * Best verified progress reached by one local-search attempt.
@@ -139,9 +143,12 @@ internal object FiveByFiveMacroReduction {
                         operators = pool.narrowCentre,
                         finishers = pool.centreFine,
                         deep = false
-                    ) ?: return failure(current, allMoves, lastStageReport)
+                    )
                     current = centreResult.state
                     allMoves += centreResult.moves
+                    if (!centreResult.solved) {
+                        return failure(current, allMoves, lastStageReport)
+                    }
                 }
 
                 if (model.edgesPaired(current)) return success(current, allMoves)
@@ -157,12 +164,10 @@ internal object FiveByFiveMacroReduction {
                     deep = true
                 )
 
-                if (edgeResult != null) {
-                    current = edgeResult.state
-                    allMoves += edgeResult.moves
-                    if (model.centresSolved(current) && model.edgesPaired(current)) {
-                        return success(current, allMoves)
-                    }
+                current = edgeResult.state
+                allMoves += edgeResult.moves
+                if (edgeResult.solved && model.centresSolved(current) && model.edgesPaired(current)) {
+                    return success(current, allMoves)
                 }
 
                 if (pass >= MAX_PASSES || outOfTime()) break
@@ -187,7 +192,7 @@ internal object FiveByFiveMacroReduction {
             operators: List<Operator>,
             finishers: List<Operator>,
             deep: Boolean
-        ): StageResult? {
+        ): StageResult {
             var current = start.copyOf()
             val accumulated = ArrayList<Move>()
             var best = score(current)
@@ -211,12 +216,12 @@ internal object FiveByFiveMacroReduction {
                 }
 
                 if (progress.solved) {
-                    return StageResult(current, simplify(accumulated))
+                    return StageResult(current, simplify(accumulated), solved = true)
                 }
             }
 
             lastStageReport = "$label reached $best of $target after $attemptsRun attempts"
-            return null
+            return StageResult(current, simplify(accumulated), solved = false)
         }
 
         private fun attemptStage(
@@ -406,7 +411,10 @@ internal object FiveByFiveMacroReduction {
         )
 
         private fun failure(state: ByteArray, moves: List<Move>, reason: String) = Result(
-            moves = emptyList(),
+            // Partial moves are still a fully legal, replayable sequence. Exposing them lets the
+            // top-level solver hand a near-complete centre state to a deterministic tail search
+            // instead of throwing away verified progress such as 52/54.
+            moves = simplify(moves),
             centresSolved = model.centresSolved(state),
             edgesPaired = model.edgesPaired(state),
             centreScore = model.centreScore(state),
