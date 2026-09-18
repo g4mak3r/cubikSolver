@@ -5,6 +5,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cubecraft.solver.solver.Min2PhaseSolver
 import com.cubecraft.solver.ui.*
@@ -37,7 +41,24 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
         onError = androidx.compose.ui.graphics.Color.White
     )
 
-    MaterialTheme(colorScheme = colors) {
+    val typography = Typography(
+        bodyLarge = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
+        bodyMedium = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+        bodySmall = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+        labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+        labelMedium = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+        titleLarge = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 22.sp),
+        titleMedium = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+    )
+    val shapes = Shapes(
+        extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+        small = androidx.compose.foundation.shape.RoundedCornerShape(3.dp),
+        medium = androidx.compose.foundation.shape.RoundedCornerShape(5.dp),
+        large = androidx.compose.foundation.shape.RoundedCornerShape(7.dp),
+        extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(9.dp)
+    )
+
+    MaterialTheme(colorScheme = colors, typography = typography, shapes = shapes) {
         Surface(Modifier.fillMaxSize(), color = AppBg, contentColor = Ink) {
             when (vm.screen) {
                 AppScreen.HOME -> HomeScreen(vm::beginScan, vm::openVirtual)
