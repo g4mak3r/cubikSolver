@@ -163,15 +163,27 @@ class FiveByFiveSolver(
             }
 
             val tailTime = deadline - System.currentTimeMillis()
+            val edgeReserve = if (NativeFiveByFiveKernel.available) 3_800L else 0L
+            val tailBudget = if (NativeFiveByFiveKernel.available) {
+                minOf(1_250L, (tailTime - edgeReserve).coerceAtLeast(0L))
+            } else {
+                Long.MAX_VALUE
+            }
             if (
-                tailTime > 1_200L &&
+                tailBudget > 250L &&
                 !reduction.centresSolved &&
                 reduction.centreScore >= 48 &&
                 reduction.moves.isNotEmpty()
             ) {
+                val tailDeadline = if (tailBudget == Long.MAX_VALUE) {
+                    Long.MAX_VALUE
+                } else {
+                    System.currentTimeMillis() + tailBudget
+                }
                 when (
                     val tail = FiveByFiveCenterSearch(
-                        maxExpanded = if (NativeFiveByFiveKernel.available) 90_000 else 180_000
+                        maxExpanded = if (NativeFiveByFiveKernel.available) 14_000 else 180_000,
+                        deadlineMs = tailDeadline
                     ).solve(candidate)
                 ) {
                     is FiveByFiveCenterSearch.Result.Success -> {
@@ -224,7 +236,7 @@ class FiveByFiveSolver(
         }
 
         lastReductionFailure = if (System.currentTimeMillis() >= deadline) {
-            "5x5 fast reduction time limit reached"
+            "5x5 native reduction time limit reached"
         } else {
             "5x5 reduction stalled: $bestDiagnostic"
         }
