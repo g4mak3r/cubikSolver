@@ -24,6 +24,7 @@ int main() {
     const int b = 31;
     std::swap(scrambled[a], scrambled[b]);
     assert(centerScore(scrambled.data()) == 52);
+    assert(score(scrambled.data(), ScoreMode::Centers) == 72);
 
     Pool pool;
     pool.count = 1;
@@ -38,7 +39,7 @@ int main() {
         scrambled.data(),
         nullptr,
         ScoreMode::Centers,
-        52,
+        72,
         false
     );
     assert(index == 0);
@@ -48,7 +49,7 @@ int main() {
         scrambled.data(),
         ScoreMode::Centers,
         78,
-        52,
+        72,
         false,
         2,
         8,
@@ -62,7 +63,7 @@ int main() {
         scrambled.data(),
         ScoreMode::Centers,
         78,
-        52,
+        72,
         false,
         32,
         100
@@ -75,11 +76,11 @@ int main() {
         scrambled.data(),
         nullptr,
         ScoreMode::Centers,
-        52,
+        72,
         false
     );
     assert(best.index == 0);
-    assert(best.score == 54);
+    assert(best.score == 78);
 
     std::cout << "cubik555 native core ok\n";
     return 0;
