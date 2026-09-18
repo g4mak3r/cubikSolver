@@ -38,11 +38,17 @@ class FiveByFiveSolver(
         val original = state.deepCopy()
         var work = state.deepCopy()
         val allMoves = ArrayList<Move>()
+        val deadline = if (NativeFiveByFiveKernel.available) {
+            System.currentTimeMillis() + 15_000L
+        } else {
+            Long.MAX_VALUE
+        }
 
-        // A parity repair can unpair an edge. Reduction is therefore allowed to rebuild a few times
-        // before the final outer-turn solve.
         for (pass in 0 until 4) {
-            val reduction = reduceWithRestarts(work, pass)
+            if (System.currentTimeMillis() >= deadline) {
+                return SolverResult.Unavailable("5x5 fast reduction time limit reached")
+            }
+            val reduction = reduceWithRestarts(work, pass, deadline)
                 ?: return SolverResult.Unavailable(lastReductionFailure)
 
             work = reduction.state
@@ -105,25 +111,43 @@ class FiveByFiveSolver(
      * partial/unverified sequence. Each prefix becomes part of the final candidate, so every path
      * is still replay-verified against the original 150 stickers before it can escape this class.
      */
-    private fun reduceWithRestarts(state: CubeState, pass: Int): ReductionChoice? {
+    private fun reduceWithRestarts(
+        state: CubeState,
+        pass: Int,
+        deadline: Long
+    ): ReductionChoice? {
         val prefixes = reductionPrefixes(pass)
         var bestDiagnostic = ""
 
         for ((index, prefix) in prefixes.withIndex()) {
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining <= 0L) break
+
             val candidate = state.deepCopy()
             candidate.applyAll(prefix)
+
+            val preferredBudget = if (NativeFiveByFiveKernel.available) {
+                when {
+                    index == 0 && pass == 0 -> 3_500L
+                    index == 0 -> 2_500L
+                    else -> 1_200L
+                }
+            } else {
+                when {
+                    index == 0 && pass == 0 -> 25_000L
+                    index == 0 -> 14_000L
+                    else -> 8_000L
+                }
+            }
 
             val reduction = try {
                 FiveByFiveMacroReduction.solve(
                     state = candidate,
-                    budgetMillis = when {
-                        index == 0 && pass == 0 -> 25_000L
-                        index == 0 -> 14_000L
-                        else -> 8_000L
-                    }
+                    budgetMillis = minOf(preferredBudget, remaining)
                 )
             } catch (t: Throwable) {
-                bestDiagnostic = "5x5 reduction failed: ${t.message ?: t.javaClass.simpleName}"
+                bestDiagnostic =
+                    "5x5 reduction failed: ${t.message ?: t.javaClass.simpleName}"
                 continue
             }
 
@@ -138,36 +162,50 @@ class FiveByFiveSolver(
                 )
             }
 
-            /*
-             * Real camera states can leave the macro centre search one tiny commutator away from
-             * completion (the field report that motivated this path repeatedly reached 52/54).
-             * The macro reducer now exposes its verified partial sequence, so finish that compact
-             * tail with a bounded centre-state A* instead of discarding the progress and trying a
-             * fresh random basin.
-             *
-             * Once centres are complete, run the normal macro reducer again only for edge pairing.
-             * Every move remains part of the final replay-verified solution.
-             */
-            if (!reduction.centresSolved && reduction.centreScore >= 48 && reduction.moves.isNotEmpty()) {
-                when (val tail = FiveByFiveCenterSearch(maxExpanded = 180_000).solve(candidate)) {
+            val tailTime = deadline - System.currentTimeMillis()
+            if (
+                tailTime > 1_200L &&
+                !reduction.centresSolved &&
+                reduction.centreScore >= 48 &&
+                reduction.moves.isNotEmpty()
+            ) {
+                when (
+                    val tail = FiveByFiveCenterSearch(
+                        maxExpanded = if (NativeFiveByFiveKernel.available) 90_000 else 180_000
+                    ).solve(candidate)
+                ) {
                     is FiveByFiveCenterSearch.Result.Success -> {
                         candidate.applyAll(tail.moves)
                         val afterCenters = prefix + reduction.moves + tail.moves
+                        val edgeRemaining = deadline - System.currentTimeMillis()
+                        if (edgeRemaining <= 0L) break
+
+                        val edgeBudget = if (NativeFiveByFiveKernel.available) {
+                            minOf(3_500L, edgeRemaining)
+                        } else {
+                            minOf(if (pass == 0) 18_000L else 12_000L, edgeRemaining)
+                        }
 
                         val edgeReduction = try {
                             FiveByFiveMacroReduction.solve(
                                 state = candidate,
-                                budgetMillis = if (pass == 0) 18_000L else 12_000L
+                                budgetMillis = edgeBudget
                             )
                         } catch (t: Throwable) {
-                            bestDiagnostic = "5x5 edge reduction after centre tail failed: " +
-                                (t.message ?: t.javaClass.simpleName)
+                            bestDiagnostic =
+                                "5x5 edge reduction failed: " +
+                                    (t.message ?: t.javaClass.simpleName)
                             continue
                         }
 
                         candidate.applyAll(edgeReduction.moves)
-                        bestDiagnostic = "centre tail expanded ${tail.expanded}; ${edgeReduction.diagnostic}"
-                        if (edgeReduction.centresSolved && edgeReduction.edgesPaired) {
+                        bestDiagnostic =
+                            "centre tail ${tail.expanded}; ${edgeReduction.diagnostic}"
+
+                        if (
+                            edgeReduction.centresSolved &&
+                            edgeReduction.edgesPaired
+                        ) {
                             return ReductionChoice(
                                 state = candidate,
                                 moves = afterCenters + edgeReduction.moves,
@@ -177,16 +215,19 @@ class FiveByFiveSolver(
                     }
 
                     is FiveByFiveCenterSearch.Result.BudgetExceeded -> {
-                        bestDiagnostic = reduction.diagnostic +
-                            "; centre tail reached ${tail.bestSolvedCenters}/48 after ${tail.expanded} nodes"
+                        bestDiagnostic =
+                            "${reduction.diagnostic}; centre tail " +
+                                "${tail.bestSolvedCenters}/48"
                     }
                 }
             }
         }
 
-        lastReductionFailure =
-            "5x5 reduction could not finish this state after ${prefixes.size} verified search basins: " +
-                "$bestDiagnostic. No unverified moves were returned."
+        lastReductionFailure = if (System.currentTimeMillis() >= deadline) {
+            "5x5 fast reduction time limit reached"
+        } else {
+            "5x5 reduction stalled: $bestDiagnostic"
+        }
         return null
     }
 
