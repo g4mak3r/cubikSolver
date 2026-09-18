@@ -198,7 +198,7 @@ private fun PaintableFace(
     size: Int,
     colors: List<Face>,
     palette: Map<Face, RgbColor>,
-    brush: Face?,
+    brush: StickerGuess?,
     locked: Int,
     onPaint: (Int) -> Unit
 ) {
