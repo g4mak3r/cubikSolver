@@ -128,14 +128,60 @@ class FiveByFiveSolver(
             }
 
             bestDiagnostic = reduction.diagnostic
-            if (!reduction.centresSolved || !reduction.edgesPaired) continue
-
             candidate.applyAll(reduction.moves)
-            return ReductionChoice(
-                state = candidate,
-                moves = prefix + reduction.moves,
-                diagnostic = reduction.diagnostic
-            )
+
+            if (reduction.centresSolved && reduction.edgesPaired) {
+                return ReductionChoice(
+                    state = candidate,
+                    moves = prefix + reduction.moves,
+                    diagnostic = reduction.diagnostic
+                )
+            }
+
+            /*
+             * Real camera states can leave the macro centre search one tiny commutator away from
+             * completion (the field report that motivated this path repeatedly reached 52/54).
+             * The macro reducer now exposes its verified partial sequence, so finish that compact
+             * tail with a bounded centre-state A* instead of discarding the progress and trying a
+             * fresh random basin.
+             *
+             * Once centres are complete, run the normal macro reducer again only for edge pairing.
+             * Every move remains part of the final replay-verified solution.
+             */
+            if (!reduction.centresSolved && reduction.centreScore >= 48 && reduction.moves.isNotEmpty()) {
+                when (val tail = FiveByFiveCenterSearch(maxExpanded = 180_000).solve(candidate)) {
+                    is FiveByFiveCenterSearch.Result.Success -> {
+                        candidate.applyAll(tail.moves)
+                        val afterCenters = prefix + reduction.moves + tail.moves
+
+                        val edgeReduction = try {
+                            FiveByFiveMacroReduction.solve(
+                                state = candidate,
+                                budgetMillis = if (pass == 0) 18_000L else 12_000L
+                            )
+                        } catch (t: Throwable) {
+                            bestDiagnostic = "5x5 edge reduction after centre tail failed: " +
+                                (t.message ?: t.javaClass.simpleName)
+                            continue
+                        }
+
+                        candidate.applyAll(edgeReduction.moves)
+                        bestDiagnostic = "centre tail expanded ${tail.expanded}; ${edgeReduction.diagnostic}"
+                        if (edgeReduction.centresSolved && edgeReduction.edgesPaired) {
+                            return ReductionChoice(
+                                state = candidate,
+                                moves = afterCenters + edgeReduction.moves,
+                                diagnostic = bestDiagnostic
+                            )
+                        }
+                    }
+
+                    is FiveByFiveCenterSearch.Result.BudgetExceeded -> {
+                        bestDiagnostic = reduction.diagnostic +
+                            "; centre tail reached ${tail.bestSolvedCenters}/48 after ${tail.expanded} nodes"
+                    }
+                }
+            }
         }
 
         lastReductionFailure =
