@@ -52,7 +52,7 @@ fun ScannerScreen(
     gridSize: Int,
     pose: ScanPose,
     index: Int,
-    centerGuess: StickerGuess?,
+    expectedCenter: StickerGuess?,
     onQuality: (Float) -> Unit,
     onCapture: (FaceObservation) -> Unit,
     onBack: () -> Unit
@@ -114,63 +114,22 @@ fun ScannerScreen(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        if (index >= 4) {
-            Text(
-                "RETURN TO",
-                color = InkSoft,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(5.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (centerGuess != null && centerGuess != StickerGuess.UNKNOWN) {
-                    val rgb = idealRgbForGuess(centerGuess)
-                    Box(
-                        Modifier.size(14.dp)
-                            .background(Color(rgb.argb()), RoundedCornerShape(2.dp))
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        centerGuess.displayName + " CENTER",
-                        color = Color(rgb.argb()),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                } else {
-                    Text(
-                        "SAVED CENTER",
-                        color = Accent,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-            if (pose.instruction.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    pose.instruction,
-                    color = Muted,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp
-                )
-            }
-        } else {
-            Text(
-                pose.title,
-                color = Ink,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = .7.sp
-            )
-        }
+        val centerSticker = latest?.stickers?.getOrNull(gridSize * gridSize / 2)
+        val liveCenter = centerSticker
+            ?.takeIf { it.confidence >= .36f }
+            ?.guess
+        val targetMatched = expectedCenter != null && liveCenter == expectedCenter
 
-        Spacer(Modifier.height(16.dp))
+        ScanGuidance(
+            index = index,
+            pose = pose,
+            expectedCenter = expectedCenter,
+            matched = targetMatched
+        )
+
+        Spacer(Modifier.height(14.dp))
 
         Box(
             Modifier.fillMaxWidth().aspectRatio(1f)
@@ -232,6 +191,69 @@ fun ScannerScreen(
             )
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun ScanGuidance(
+    index: Int,
+    pose: ScanPose,
+    expectedCenter: StickerGuess?,
+    matched: Boolean
+) {
+    val glyph = when (index) {
+        0 -> null
+        1, 2, 3 -> "←"
+        else -> "◇"
+    }
+
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = 54.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (glyph != null) {
+            Text(
+                glyph,
+                color = if (matched) Accent else Ink,
+                fontFamily = FontFamily.Monospace,
+                fontSize = if (index <= 3) 34.sp else 24.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
+
+        if (expectedCenter != null) {
+            val rgb = idealRgbForGuess(expectedCenter)
+            val color = Color(rgb.argb())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(16.dp)
+                        .background(color, RoundedCornerShape(2.dp))
+                        .border(
+                            if (matched) 2.dp else 1.dp,
+                            if (matched) Accent else Outline,
+                            RoundedCornerShape(2.dp)
+                        )
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    expectedCenter.displayName,
+                    color = if (matched) Accent else color,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        } else {
+            Text(
+                pose.title,
+                color = Ink,
+                fontFamily = FontFamily.Monospace,
+                fontSize = if (index == 0) 20.sp else 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = .7.sp
+            )
+        }
     }
 }
 
