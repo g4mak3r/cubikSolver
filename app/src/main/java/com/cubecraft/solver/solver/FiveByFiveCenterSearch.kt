@@ -21,7 +21,8 @@ import java.util.PriorityQueue
  * search strategy while preserving this input/output contract and replay verification.
  */
 class FiveByFiveCenterSearch(
-    private val maxExpanded: Int = 60_000
+    private val maxExpanded: Int = 60_000,
+    private val deadlineMs: Long = Long.MAX_VALUE
 ) {
     sealed interface Result {
         data class Success(
@@ -92,7 +93,11 @@ class FiveByFiveCenterSearch(
         var expanded = 0
         var bestSolved = firstSolved
 
-        while (queue.isNotEmpty() && expanded < maxExpanded) {
+        while (
+            queue.isNotEmpty() &&
+            expanded < maxExpanded &&
+            System.currentTimeMillis() < deadlineMs
+        ) {
             val node = queue.remove()
             expanded++
 
@@ -106,6 +111,7 @@ class FiveByFiveCenterSearch(
             }
 
             for (action in actions) {
+                if (System.currentTimeMillis() >= deadlineMs) break
                 if (canMergeWithPrevious(node.lastAction, action)) continue
 
                 val nextCube = node.cube.deepCopy()
