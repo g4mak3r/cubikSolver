@@ -29,6 +29,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.scanner.RgbColor
+import com.cubecraft.solver.scanner.StickerGuess
+import com.cubecraft.solver.scanner.canonicalStickerGuesses
 import com.cubecraft.solver.solver.ValidationReport
 
 @Composable
@@ -36,6 +38,7 @@ fun ReviewScreen(
     size: Int,
     faces: Map<Face, List<Face>>,
     palette: Map<Face, RgbColor>,
+    colorFaces: Map<StickerGuess, Face>,
     report: ValidationReport?,
     message: String?,
     onRotate: (Face) -> Unit,
@@ -111,6 +114,7 @@ fun ReviewScreen(
             face = face,
             colors = faces.getValue(face),
             palette = palette,
+            colorFaces = colorFaces,
             onSetColor = { index, color -> onSetColor(face, index, color) },
             onRotate = { onRotate(face) },
             onDismiss = { editingFace = null }
@@ -124,12 +128,13 @@ private fun FaceEditor(
     face: Face,
     colors: List<Face>,
     palette: Map<Face, RgbColor>,
+    colorFaces: Map<StickerGuess, Face>,
     onSetColor: (Int, Face) -> Unit,
     onRotate: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val center = size * size / 2
-    var brush by remember(face) { mutableStateOf<Face?>(null) }
+    var brush by remember(face) { mutableStateOf<StickerGuess?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -159,13 +164,13 @@ private fun FaceEditor(
                 brush = brush,
                 locked = center,
                 onPaint = { index ->
-                    brush?.let { onSetColor(index, it) }
+                    brush?.let(colorFaces::get)?.let { onSetColor(index, it) }
                 }
             )
 
             Spacer(Modifier.weight(.4f))
 
-            FacePalette(palette, brush) { brush = it }
+            FacePalette(brush) { brush = it }
 
             Spacer(Modifier.height(14.dp))
 
@@ -268,17 +273,17 @@ private fun PaintableFace(
 
 @Composable
 private fun FacePalette(
-    palette: Map<Face, RgbColor>,
-    selected: Face?,
-    onSelect: (Face) -> Unit
+    selected: StickerGuess?,
+    onSelect: (StickerGuess) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Face.entries.forEach { face ->
-            val active = selected == face
-            val color = faceColor(face, palette)
+        canonicalStickerGuesses.forEach { guess ->
+            val rgb = idealRgbForGuess(guess)
+            val color = Color(rgb.argb())
+            val active = selected == guess
             Surface(
                 modifier = Modifier.weight(1f).height(46.dp),
-                onClick = { onSelect(face) },
+                onClick = { onSelect(guess) },
                 color = color,
                 shape = RoundedCornerShape(3.dp),
                 border = BorderStroke(
@@ -288,7 +293,7 @@ private fun FacePalette(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        face.symbol.toString(),
+                        guess.label,
                         color = if (color.luminance() > .52f) Color.Black else Color.White,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Black,
