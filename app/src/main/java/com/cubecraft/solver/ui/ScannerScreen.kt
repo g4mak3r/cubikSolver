@@ -5,6 +5,10 @@ import android.content.pm.PackageManager
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Typeface
 import android.util.Size
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -24,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -38,12 +43,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.scanner.FaceAnalyzer
 import com.cubecraft.solver.scanner.FaceObservation
 import com.cubecraft.solver.scanner.NormalizedPoint
 import com.cubecraft.solver.scanner.ScanPose
 import com.cubecraft.solver.scanner.StickerGuess
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
@@ -53,6 +60,7 @@ fun ScannerScreen(
     pose: ScanPose,
     index: Int,
     expectedCenter: StickerGuess?,
+    capturedFaces: Map<Face, List<StickerGuess>>,
     onQuality: (Float) -> Unit,
     onCapture: (FaceObservation) -> Unit,
     onBack: () -> Unit
@@ -71,9 +79,19 @@ fun ScannerScreen(
     var cameraError by remember { mutableStateOf<String?>(null) }
     var pendingCapture by remember { mutableStateOf(false) }
     var acceptFramesAfter by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var introSettled by remember(index) { mutableStateOf(index != 0) }
 
     LaunchedEffect(Unit) {
         if (!granted) launcher.launch(Manifest.permission.CAMERA)
+    }
+    LaunchedEffect(index) {
+        if (index == 0) {
+            introSettled = false
+            delay(650L)
+            introSettled = true
+        } else {
+            introSettled = true
+        }
     }
     LaunchedEffect(index) {
         latest = null
@@ -114,7 +132,26 @@ fun ScannerScreen(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
+
+        val guideHeight by animateDpAsState(
+            targetValue = if (index == 0 && !introSettled) 190.dp else 112.dp,
+            animationSpec = tween(650, easing = FastOutSlowInEasing),
+            label = "scanGuideHeight"
+        )
+        val cameraAlpha by animateFloatAsState(
+            targetValue = if (index == 0 && !introSettled) 0f else 1f,
+            animationSpec = tween(420),
+            label = "scanCameraAlpha"
+        )
+
+        ScanOrientationGuide(
+            gridSize = gridSize,
+            index = index,
+            pose = pose,
+            capturedFaces = capturedFaces,
+            modifier = Modifier.fillMaxWidth().height(guideHeight)
+        )
 
         val centerSticker = latest?.stickers?.getOrNull(gridSize * gridSize / 2)
         val liveCenter = centerSticker
@@ -129,10 +166,11 @@ fun ScannerScreen(
             matched = targetMatched
         )
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
 
         Box(
             Modifier.fillMaxWidth().aspectRatio(1f)
+                .alpha(cameraAlpha)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Viewport)
                 .border(1.dp, Outline, RoundedCornerShape(6.dp))
@@ -201,33 +239,27 @@ private fun ScanGuidance(
     expectedCenter: StickerGuess?,
     matched: Boolean
 ) {
-    val glyph = when (index) {
-        0 -> null
-        1, 2, 3 -> "←"
-        else -> "◇"
-    }
-
     Column(
-        Modifier.fillMaxWidth().heightIn(min = 54.dp),
+        Modifier.fillMaxWidth().heightIn(min = 44.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        if (glyph != null) {
-            Text(
-                glyph,
-                color = if (matched) Accent else Ink,
-                fontFamily = FontFamily.Monospace,
-                fontSize = if (index <= 3) 34.sp else 24.sp,
-                fontWeight = FontWeight.Black
-            )
-        }
+        Text(
+            pose.title,
+            color = Ink,
+            fontFamily = FontFamily.Monospace,
+            fontSize = if (index == 0) 13.sp else 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = .7.sp
+        )
 
         if (expectedCenter != null) {
+            Spacer(Modifier.height(5.dp))
             val rgb = idealRgbForGuess(expectedCenter)
             val color = Color(rgb.argb())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(16.dp)
+                    Modifier.size(12.dp)
                         .background(color, RoundedCornerShape(2.dp))
                         .border(
                             if (matched) 2.dp else 1.dp,
@@ -235,24 +267,15 @@ private fun ScanGuidance(
                             RoundedCornerShape(2.dp)
                         )
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     expectedCenter.displayName,
-                    color = if (matched) Accent else color,
+                    color = if (matched) Accent else InkSoft,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
-        } else {
-            Text(
-                pose.title,
-                color = Ink,
-                fontFamily = FontFamily.Monospace,
-                fontSize = if (index == 0) 20.sp else 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = .7.sp
-            )
         }
     }
 }

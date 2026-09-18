@@ -64,7 +64,7 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                 AppScreen.HOME -> HomeScreen(vm::beginScan, vm::openVirtual)
                 AppScreen.SCAN -> ScannerScreen(
                     vm.cubeSize, vm.currentPose, vm.scanIndex, vm.expectedCenterGuess,
-                    vm::updateScanQuality, vm::captureFace, vm::home
+                    vm.scanGuideFaces, vm::updateScanQuality, vm::captureFace, vm::home
                 )
                 AppScreen.FACE_CONFIRM -> vm.pendingFaceObservation?.let { observation ->
                     FaceConfirmScreen(
