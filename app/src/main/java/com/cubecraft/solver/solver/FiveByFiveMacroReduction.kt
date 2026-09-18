@@ -31,6 +31,7 @@ internal object FiveByFiveMacroReduction {
     private const val FACELETS = 150
     private const val CENTRE_TARGET = 54
     private const val EDGE_TARGET = 24
+    private const val EDGE_SEARCH_TARGET = 396
 
     private const val STAGE_ATTEMPTS = 3
     private const val MAX_STAGE_MOVES = 520
@@ -156,8 +157,8 @@ internal object FiveByFiveMacroReduction {
                 val edgeResult = runStage(
                     label = "edge pairing",
                     start = current,
-                    target = EDGE_TARGET,
-                    score = model::edgeQualityScore,
+                    target = EDGE_SEARCH_TARGET,
+                    score = model::edgeSearchScore,
                     legal = model::centresSolved,
                     operators = pool.centreSafe,
                     finishers = pool.edgeFinishers,
@@ -925,6 +926,17 @@ internal object FiveByFiveMacroReduction {
             var total = 0
             for (slot in edgeSlots) total += edgeQuality(state, slot)
             return total
+        }
+
+        fun edgeSearchScore(state: ByteArray): Int {
+            var wings = 0
+            var complete = 0
+            for (slot in edgeSlots) {
+                val value = edgeQuality(state, slot)
+                wings += value
+                if (value == 2) complete++
+            }
+            return wings * 16 + complete
         }
 
         fun edgesPaired(state: ByteArray): Boolean = edgeQualityScore(state) == EDGE_TARGET
