@@ -47,7 +47,7 @@ class CubecraftViewModel : ViewModel() {
 
     val currentPose: ScanPose get() {
         val base = scanSequence[scanIndex.coerceIn(0,5)]
-        val label = frontCenterGuess?.label?.takeIf { it != "?" } ?: "saved FRONT"
+        val label = frontCenterGuess?.displayName?.takeIf { it != "COLOR" } ?: "SAVED"
         return base.copy(instruction = base.instruction.replace("{FRONT_CENTER}", label))
     }
     /** The next physical turn the user should perform at the current slider position. */
