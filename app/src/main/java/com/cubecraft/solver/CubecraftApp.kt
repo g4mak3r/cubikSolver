@@ -84,6 +84,7 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                         size = vm.cubeSize,
                         faces = faces,
                         palette = vm.palette,
+                        colorFaces = vm.colorFaces,
                         report = vm.validation,
                         message = vm.message,
                         onRotate = vm::rotateReviewFace,
@@ -94,7 +95,7 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                     )
                 }
                 AppScreen.STUDIO -> StudioScreen(
-                    vm.cubeSize, vm.cube, vm.revision, vm.palette, vm.moveHistory,
+                    vm.cubeSize, vm.cube, vm.revision, vm.palette, vm.colorFaces, vm.moveHistory,
                     vm.solution, vm.solutionIndex, vm.currentGuideMove, vm.solving,
                     vm.message, vm.hasBaseline, vm::home, vm::applyMove, vm::undo,
                     vm::redo, vm::returnToScan, vm::resetSolved, vm::solve,
