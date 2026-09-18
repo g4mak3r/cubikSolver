@@ -71,11 +71,8 @@ class CubecraftViewModel : ViewModel() {
             scanSequence[scanIndex.coerceIn(0, 5)].face
         )
 
-    val currentPose: ScanPose get() {
-        val base = scanSequence[scanIndex.coerceIn(0,5)]
-        val label = frontCenterGuess?.displayName?.takeIf { it != "COLOR" } ?: "SAVED"
-        return base.copy(instruction = base.instruction.replace("{FRONT_CENTER}", label))
-    }
+    val currentPose: ScanPose
+        get() = scanSequence[scanIndex.coerceIn(0, 5)]
     
     val currentGuideMove: Move? get() = solution.getOrNull(solutionIndex)
     val moveHistory: List<Move> get() = history.toList()
