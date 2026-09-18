@@ -6,7 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,74 +22,76 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
     var selected by remember { mutableIntStateOf(3) }
 
     Column(
-        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 22.dp),
+        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
+            androidx.compose.material3.Text(
                 "CUBIK/SOLVER",
                 color = Ink,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = .8.sp
+                letterSpacing = 1.1.sp
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                "v" + BuildConfig.VERSION_NAME + "  //  OFFLINE",
+            androidx.compose.material3.Text(
+                BuildConfig.VERSION_NAME,
                 color = Muted,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 9.sp
             )
         }
-        Spacer(Modifier.height(8.dp))
-        HorizontalDivider(color = Outline, thickness = 1.dp)
 
-        Spacer(Modifier.weight(.72f))
-        Text(
-            "CUBIK",
-            color = Ink,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 45.sp,
-            lineHeight = 45.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 2.sp
-        )
-        Text(
-            "SOLVER",
-            color = Accent,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 45.sp,
-            lineHeight = 45.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 2.sp
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "CAMERA  /  RECONSTRUCT  /  SOLVE",
-            color = Muted,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 9.sp,
-            letterSpacing = .65.sp
-        )
+        Spacer(Modifier.weight(1f))
 
-        Spacer(Modifier.height(36.dp))
+        Box(
+            Modifier.size(148.dp)
+                .border(1.dp, Outline, RoundedCornerShape(10.dp))
+                .background(Panel, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.material3.Text(
+                    "CUBIK",
+                    color = Ink,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 34.sp,
+                    lineHeight = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                )
+                androidx.compose.material3.Text(
+                    "SOLVER",
+                    color = Accent,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 3.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(34.dp))
+
         Row(
-            Modifier.fillMaxWidth().border(1.dp, InkSoft, RoundedCornerShape(5.dp)).padding(3.dp),
+            Modifier.fillMaxWidth()
+                .border(1.dp, Outline, RoundedCornerShape(4.dp))
+                .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             listOf(3, 5).forEach { n ->
                 val active = selected == n
                 Box(
-                    Modifier.weight(1f).height(50.dp)
-                        .background(if (active) Ink else AppBg, RoundedCornerShape(3.dp))
+                    Modifier.weight(1f).height(48.dp)
+                        .background(if (active) Panel2 else AppBg, RoundedCornerShape(2.dp))
                         .clickable { selected = n },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        n.toString() + " × " + n,
-                        color = if (active) Panel else Ink,
+                    androidx.compose.material3.Text(
+                        "$n×$n",
+                        color = if (active) Accent else InkSoft,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -97,44 +100,40 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
+
         Button(
             onClick = { onScan(selected) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(5.dp)
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(3.dp)
         ) {
-            Text(
-                "SCAN REAL CUBE  →",
+            androidx.compose.material3.Text(
+                "SCAN",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = .5.sp
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { onVirtual(selected) },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(5.dp),
-            border = BorderStroke(1.dp, InkSoft)
-        ) {
-            Text(
-                "OPEN VIRTUAL CUBE",
-                color = Ink,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
+                letterSpacing = 1.sp
             )
         }
 
-        Spacer(Modifier.weight(1f))
-        Text(
-            "LOCAL CV  //  NO CLOUD  //  ANDROID 10+",
-            color = Muted,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 8.sp,
-            letterSpacing = .35.sp
-        )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(7.dp))
+
+        OutlinedButton(
+            onClick = { onVirtual(selected) },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(3.dp),
+            border = BorderStroke(1.dp, Outline)
+        ) {
+            androidx.compose.material3.Text(
+                "VIRTUAL",
+                color = InkSoft,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = .8.sp
+            )
+        }
+
+        Spacer(Modifier.weight(1.2f))
     }
 }
