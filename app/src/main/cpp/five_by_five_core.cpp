@@ -239,4 +239,59 @@ EvalResult findBest(
     return best;
 }
 
+
+WrappedEvalResult findFirstImprovingWrapped(
+    const Pool& pool,
+    const WrapperPool& wrappers,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int before,
+    bool requireCenters
+) {
+    alignas(64) std::array<std::uint8_t, kFacelets> staged{};
+    alignas(64) std::array<std::uint8_t, kFacelets> scratch{};
+    alignas(64) std::array<std::uint8_t, kFacelets> result{};
+
+    for (int w = 0; w < wrappers.count; ++w) {
+        applyPerm(state, wrappers.setup(w), staged.data());
+        for (int i = 0; i < pool.count; ++i) {
+            applyPerm(staged.data(), pool.perm(i), scratch.data());
+            applyPerm(scratch.data(), wrappers.undo(w), result.data());
+            if (requireCenters && !centersSolved(result.data())) continue;
+            const int value = score(result.data(), mode);
+            if (value > before) return {w, i, value};
+        }
+    }
+    return {};
+}
+
+WrappedEvalResult findBestWrapped(
+    const Pool& pool,
+    const WrapperPool& wrappers,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int floor,
+    bool requireCenters
+) {
+    alignas(64) std::array<std::uint8_t, kFacelets> staged{};
+    alignas(64) std::array<std::uint8_t, kFacelets> scratch{};
+    alignas(64) std::array<std::uint8_t, kFacelets> result{};
+
+    WrappedEvalResult best;
+    for (int w = 0; w < wrappers.count; ++w) {
+        applyPerm(state, wrappers.setup(w), staged.data());
+        for (int i = 0; i < pool.count; ++i) {
+            applyPerm(staged.data(), pool.perm(i), scratch.data());
+            applyPerm(scratch.data(), wrappers.undo(w), result.data());
+            if (requireCenters && !centersSolved(result.data())) continue;
+            const int value = score(result.data(), mode);
+            if (value < floor) continue;
+            if (value > best.score) {
+                best = {w, i, value};
+            }
+        }
+    }
+    return best;
+}
+
 }
