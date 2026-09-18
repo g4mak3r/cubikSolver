@@ -15,17 +15,36 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cubecraft.solver.model.*
+import com.cubecraft.solver.model.CubeState
+import com.cubecraft.solver.model.Face
+import com.cubecraft.solver.model.Move
+import com.cubecraft.solver.model.StickerKey
 import com.cubecraft.solver.scanner.RgbColor
 import kotlin.math.roundToInt
 
 @Composable
 fun StudioScreen(
-    size: Int, cube: CubeState, revision: Int, palette: Map<Face,RgbColor>, history: List<Move>,
-    solution: List<Move>, solutionIndex: Int, guide: Move?, solving: Boolean, message: String?,
-    canReturnToScan: Boolean, onBack: () -> Unit, onMove: (Move) -> Unit, onUndo: () -> Unit,
-    onRedo: () -> Unit, onReturnScan: () -> Unit, onReset: () -> Unit, onSolve: () -> Unit,
-    onNext: () -> Unit, onPrev: () -> Unit, onSeek: (Int) -> Unit,
+    size: Int,
+    cube: CubeState,
+    revision: Int,
+    palette: Map<Face, RgbColor>,
+    history: List<Move>,
+    solution: List<Move>,
+    solutionIndex: Int,
+    guide: Move?,
+    solving: Boolean,
+    message: String?,
+    canReturnToScan: Boolean,
+    onBack: () -> Unit,
+    onMove: (Move) -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onReturnScan: () -> Unit,
+    onReset: () -> Unit,
+    onSolve: () -> Unit,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+    onSeek: (Int) -> Unit,
     onPaintSticker: (StickerKey, Face) -> Unit
 ) {
     var width by remember(size) { mutableIntStateOf(1) }
@@ -34,37 +53,41 @@ fun StudioScreen(
     var paintColor by remember { mutableStateOf(Face.F) }
     val guided = canReturnToScan && (size == 3 || size == 5)
 
-    Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 14.dp)) {
-        Spacer(Modifier.height(8.dp))
+    Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 12.dp)) {
+        Spacer(Modifier.height(7.dp))
+
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 6.dp)) {
-                Text("← HOME", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+                Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "%02dX%02d / %s".format(size, size, if (guided) "GUIDE" else "LAB"),
-                color = Muted, fontFamily = FontFamily.Monospace, fontSize = 9.sp
+                "$size×$size",
+                color = InkSoft,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
             )
             if (canReturnToScan) {
                 Spacer(Modifier.width(10.dp))
-                TextButton(onClick = { editMode = !editMode }, contentPadding = PaddingValues(0.dp)) {
+                TextButton(
+                    onClick = { editMode = !editMode },
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
                     Text(
                         if (editMode) "DONE" else "EDIT",
-                        color = if (editMode) Accent else Ink,
+                        color = if (editMode) Accent else Muted,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 9.sp
                     )
                 }
             }
         }
-        HorizontalDivider(color = Outline)
-        Spacer(Modifier.height(8.dp))
 
         Box(
             Modifier.fillMaxWidth().weight(1f)
-                .background(Viewport, RoundedCornerShape(6.dp))
-                .border(1.dp, InkSoft, RoundedCornerShape(6.dp))
+                .background(Viewport, RoundedCornerShape(7.dp))
+                .border(1.dp, Outline, RoundedCornerShape(7.dp))
         ) {
             Cube3D(
                 cube = cube,
@@ -75,95 +98,117 @@ fun StudioScreen(
                 paintColor = if (editMode) paintColor else null,
                 onPaintSticker = if (editMode) onPaintSticker else null
             )
-            Text(
-                when {
-                    editMode -> "PAINT / DRAG TO ORBIT"
-                    guide != null -> "NEXT / " + guide.notation()
-                    else -> "DRAG ORBIT  ·  PINCH ZOOM"
-                },
-                modifier = Modifier.align(Alignment.BottomStart).padding(9.dp)
-                    .background(CameraChrome, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 3.dp),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp
-            )
         }
 
         Spacer(Modifier.height(8.dp))
+
         when {
-            editMode -> MinimalPaintPalette(palette, paintColor) { paintColor = it }
-            solving -> AnalyzeLine(size)
-            solution.isNotEmpty() -> GuidePanel(solution, solutionIndex, onSeek, onPrev, onNext)
+            editMode -> PaintPalette(palette, paintColor) { paintColor = it }
+            solving -> SolveProgress(size)
+            solution.isNotEmpty() -> SolutionPanel(
+                solution,
+                solutionIndex,
+                onSeek,
+                onPrev,
+                onNext
+            )
         }
 
-        if (!message.isNullOrBlank()) {
-            Spacer(Modifier.height(5.dp))
+        if (isErrorMessage(message)) {
+            Spacer(Modifier.height(6.dp))
             Text(
-                message,
-                modifier = Modifier.fillMaxWidth(),
-                color = if (
-                    message.contains("could", true) ||
-                    message.contains("invalid", true) ||
-                    message.contains("failed", true)
-                ) Danger else Muted,
+                message.orEmpty(),
+                color = Danger,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 8.sp,
-                lineHeight = 11.sp,
-                maxLines = 2
+                fontSize = 9.sp,
+                lineHeight = 12.sp,
+                maxLines = 3
             )
         }
 
         Spacer(Modifier.height(7.dp))
+
         if (guided) {
-            GuideActions(
-                solving = solving,
-                hasSolution = solution.isNotEmpty(),
-                editMode = editMode,
-                onStart = { onSeek(0) },
-                onReturnScan = onReturnScan,
-                onAnalyze = onSolve
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(
+                    onClick = onReturnScan,
+                    enabled = !editMode,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(1.dp, Outline)
+                ) {
+                    Text("SCAN", color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                }
+                Button(
+                    onClick = onSolve,
+                    enabled = !solving && !editMode,
+                    modifier = Modifier.weight(1.35f).height(46.dp),
+                    shape = RoundedCornerShape(3.dp)
+                ) {
+                    Text(
+                        if (solving) "…" else "ANALYZE",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         } else {
-            ManualControlsMinimal(
-                size, width, turns, editMode, canReturnToScan,
-                { width = it }, { turns = it }, onMove, onUndo, onRedo, onReturnScan, onReset, onSolve, solving
+            ManualControls(
+                size = size,
+                width = width,
+                turns = turns,
+                editMode = editMode,
+                canReturnToScan = canReturnToScan,
+                onWidth = { width = it },
+                onTurns = { turns = it },
+                onMove = onMove,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                onReturnScan = onReturnScan,
+                onReset = onReset,
+                onSolve = onSolve,
+                solving = solving
             )
         }
 
         if (!guided && history.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
-                history.takeLast(14).joinToString(" ") { it.notation() },
-                color = Muted, fontFamily = FontFamily.Monospace, fontSize = 8.sp, maxLines = 1
+                history.takeLast(12).joinToString(" ") { it.notation() },
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                maxLines = 1
             )
         }
+
         Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-private fun AnalyzeLine(size: Int) {
+private fun SolveProgress(size: Int) {
     Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "ANALYZING " + size + "×" + size,
-                color = Accent, fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp, fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                if (size == 5) "CENTER → EDGE → 3×3" else "MIN2PHASE",
-                color = Muted, fontFamily = FontFamily.Monospace, fontSize = 8.sp
-            )
-        }
-        Spacer(Modifier.height(5.dp))
         LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+        Spacer(Modifier.height(7.dp))
+        Text(
+            if (size == 5) "REDUCING 5×5" else "SOLVING",
+            color = Accent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
-private fun GuidePanel(
-    solution: List<Move>, index: Int, onSeek: (Int) -> Unit, onPrev: () -> Unit, onNext: () -> Unit
+private fun SolutionPanel(
+    solution: List<Move>,
+    index: Int,
+    onSeek: (Int) -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit
 ) {
     val total = solution.size
     val move = solution.getOrNull(index)
@@ -174,105 +219,87 @@ private fun GuidePanel(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (atEnd) "SOLVED" else "%03d / %03d".format(index + 1, total),
-                    color = if (atEnd) Success else Accent,
+                    move?.notation() ?: "SOLVED",
+                    color = if (atEnd) Success else Ink,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    move?.notation() ?: "DONE",
-                    color = Ink,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 27.sp,
+                    fontSize = 30.sp,
+                    lineHeight = 31.sp,
                     fontWeight = FontWeight.Black
                 )
-                Text(
-                    move?.let(::moveInstruction) ?: "Sequence verified on the digital cube.",
-                    color = InkSoft,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    lineHeight = 12.sp
-                )
+                if (move != null) {
+                    Text(
+                        moveInstruction(move),
+                        color = InkSoft,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp
+                    )
+                }
             }
-            OutlinedButton(
-                onClick = onPrev, enabled = index > 0,
-                modifier = Modifier.size(width = 48.dp, height = 42.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
-            ) { Text("←", fontFamily = FontFamily.Monospace) }
-            Spacer(Modifier.width(5.dp))
-            Button(
-                onClick = onNext, enabled = index < total,
-                modifier = Modifier.size(width = 62.dp, height = 42.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
-            ) {
-                Text(
-                    if (index + 1 >= total) "END" else "NEXT",
-                    fontFamily = FontFamily.Monospace, fontSize = 9.sp
-                )
-            }
+            Text(
+                if (atEnd) total.toString() else (index + 1).toString() + "/" + total,
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp
+            )
         }
+
         Slider(
             value = index.toFloat().coerceIn(0f, max),
             onValueChange = { onSeek(it.roundToInt()) },
             valueRange = 0f..max,
             steps = 0,
-            modifier = Modifier.fillMaxWidth().height(32.dp)
+            modifier = Modifier.fillMaxWidth().height(36.dp)
         )
-    }
-}
 
-@Composable
-private fun GuideActions(
-    solving: Boolean, hasSolution: Boolean, editMode: Boolean,
-    onStart: () -> Unit, onReturnScan: () -> Unit, onAnalyze: () -> Unit
-) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OutlinedButton(
-            onClick = onStart, enabled = hasSolution && !editMode,
-            modifier = Modifier.weight(.75f).height(44.dp), shape = RoundedCornerShape(3.dp)
-        ) { Text("|<", fontFamily = FontFamily.Monospace, fontSize = 10.sp) }
-        OutlinedButton(
-            onClick = onReturnScan, enabled = !editMode,
-            modifier = Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(3.dp)
-        ) { Text("SCAN", fontFamily = FontFamily.Monospace, fontSize = 9.sp) }
-        Button(
-            onClick = onAnalyze, enabled = !solving && !editMode,
-            modifier = Modifier.weight(1.3f).height(44.dp), shape = RoundedCornerShape(3.dp)
-        ) {
-            Text(
-                if (solving) "…" else "ANALYZE",
-                fontFamily = FontFamily.Monospace, fontSize = 9.sp, fontWeight = FontWeight.Bold
-            )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+                onClick = onPrev,
+                enabled = index > 0,
+                modifier = Modifier.weight(1f).height(42.dp),
+                shape = RoundedCornerShape(3.dp),
+                border = BorderStroke(1.dp, Outline)
+            ) {
+                Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+            }
+            Button(
+                onClick = onNext,
+                enabled = index < total,
+                modifier = Modifier.weight(1f).height(42.dp),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Text("→", fontFamily = FontFamily.Monospace, fontSize = 16.sp)
+            }
         }
     }
 }
 
 @Composable
-private fun MinimalPaintPalette(
-    palette: Map<Face,RgbColor>, selected: Face, onSelect: (Face) -> Unit
+private fun PaintPalette(
+    palette: Map<Face, RgbColor>,
+    selected: Face,
+    onSelect: (Face) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Face.entries.forEach { face ->
-            val active = face == selected
-            val background = faceColor(face, palette)
+            val color = faceColor(face, palette)
+            val active = selected == face
             Surface(
-                modifier = Modifier.weight(1f).height(40.dp),
+                modifier = Modifier.weight(1f).height(42.dp),
                 onClick = { onSelect(face) },
-                color = background,
+                color = color,
                 shape = RoundedCornerShape(3.dp),
                 border = BorderStroke(
                     if (active) 3.dp else 1.dp,
-                    if (active) Ink else Color.Black.copy(alpha = .28f)
+                    if (active) Accent else Color.Black.copy(alpha = .3f)
                 )
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         face.symbol.toString(),
-                        color = if (background.luminance() > .5f) Ink else Color.White,
+                        color = if (color.luminance() > .52f) Color.Black else Color.White,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black
                     )
                 }
             }
@@ -281,79 +308,129 @@ private fun MinimalPaintPalette(
 }
 
 @Composable
-private fun ManualControlsMinimal(
-    size: Int, width: Int, turns: Int, editMode: Boolean, canReturnToScan: Boolean,
-    onWidth: (Int) -> Unit, onTurns: (Int) -> Unit, onMove: (Move) -> Unit,
-    onUndo: () -> Unit, onRedo: () -> Unit, onReturnScan: () -> Unit, onReset: () -> Unit,
-    onSolve: () -> Unit, solving: Boolean
+private fun ManualControls(
+    size: Int,
+    width: Int,
+    turns: Int,
+    editMode: Boolean,
+    canReturnToScan: Boolean,
+    onWidth: (Int) -> Unit,
+    onTurns: (Int) -> Unit,
+    onMove: (Move) -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onReturnScan: () -> Unit,
+    onReset: () -> Unit,
+    onSolve: () -> Unit,
+    solving: Boolean
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf(1 to "CW", 3 to "CCW", 2 to "180").forEach { pair ->
-                val value = pair.first
-                val label = pair.second
+            listOf(1 to "CW", 3 to "CCW", 2 to "180").forEach { (value, label) ->
                 OutlinedButton(
-                    onClick = { onTurns(value) }, enabled = !editMode,
+                    onClick = { onTurns(value) },
+                    enabled = !editMode,
                     modifier = Modifier.weight(1f).height(38.dp),
-                    contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(3.dp),
                     border = BorderStroke(
                         if (turns == value) 2.dp else 1.dp,
                         if (turns == value) Accent else Outline
                     )
-                ) { Text(label, fontFamily = FontFamily.Monospace, fontSize = 8.sp, color = Ink) }
+                ) {
+                    Text(label, color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+                }
             }
-            if (size == 5) OutlinedButton(
-                onClick = { onWidth(if (width == 1) 2 else 1) }, enabled = !editMode,
-                modifier = Modifier.weight(1f).height(38.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
-            ) { Text(if (width == 1) "OUT" else "WIDE", fontFamily = FontFamily.Monospace, fontSize = 8.sp) }
-        }
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Face.entries.forEach { face ->
+            if (size == 5) {
                 OutlinedButton(
-                    onClick = { onMove(Move(face, width, turns)) }, enabled = !editMode,
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
+                    onClick = { onWidth(if (width == 1) 2 else 1) },
+                    enabled = !editMode,
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(1.dp, Outline)
                 ) {
                     Text(
-                        face.symbol.toString(), color = Ink,
-                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
+                        if (width == 1) "OUT" else "WIDE",
+                        color = InkSoft,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 8.sp
                     )
                 }
             }
         }
+
         Spacer(Modifier.height(4.dp))
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Face.entries.forEach { face ->
+                OutlinedButton(
+                    onClick = { onMove(Move(face, width, turns)) },
+                    enabled = !editMode,
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(1.dp, Outline)
+                ) {
+                    Text(
+                        face.symbol.toString(),
+                        color = Ink,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             OutlinedButton(
-                onClick = onUndo, enabled = !editMode,
+                onClick = onUndo,
+                enabled = !editMode,
                 modifier = Modifier.weight(1f).height(40.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
-            ) { Text("UNDO", fontFamily = FontFamily.Monospace, fontSize = 8.sp) }
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp),
+                border = BorderStroke(1.dp, Outline)
+            ) {
+                Text("UNDO", color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+            }
             OutlinedButton(
-                onClick = onRedo, enabled = !editMode,
+                onClick = onRedo,
+                enabled = !editMode,
                 modifier = Modifier.weight(1f).height(40.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
-            ) { Text("REDO", fontFamily = FontFamily.Monospace, fontSize = 8.sp) }
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp),
+                border = BorderStroke(1.dp, Outline)
+            ) {
+                Text("REDO", color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+            }
             OutlinedButton(
                 onClick = if (canReturnToScan) onReturnScan else onReset,
                 enabled = !editMode,
                 modifier = Modifier.weight(1f).height(40.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp),
+                border = BorderStroke(1.dp, Outline)
             ) {
                 Text(
                     if (canReturnToScan) "SCAN" else "RESET",
-                    fontFamily = FontFamily.Monospace, fontSize = 8.sp
+                    color = InkSoft,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 8.sp
                 )
             }
             Button(
-                onClick = onSolve, enabled = !solving && !editMode,
+                onClick = onSolve,
+                enabled = !solving && !editMode,
                 modifier = Modifier.weight(1.1f).height(40.dp),
-                contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(3.dp)
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(3.dp)
             ) {
                 Text(
                     if (solving) "…" else "SOLVE",
-                    fontFamily = FontFamily.Monospace, fontSize = 8.sp
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 8.sp
                 )
             }
         }
@@ -370,14 +447,27 @@ private fun moveInstruction(move: Move): String {
         Face.B -> "BACK"
     }
     val layer = when (move.width) {
-        1 -> "FACE"
-        2 -> "2 LAYERS"
-        else -> move.width.toString() + " LAYERS"
+        1 -> ""
+        2 -> " · 2 LAYERS"
+        else -> " · " + move.width + " LAYERS"
     }
     val direction = when (move.quarterTurns) {
-        1 -> "CLOCKWISE ↻"
+        1 -> "CLOCKWISE"
         2 -> "180°"
-        else -> "COUNTER-CLOCKWISE ↺"
+        else -> "COUNTER-CLOCKWISE"
     }
-    return face + " / " + layer + " / " + direction
+    return face + layer + " · " + direction
+}
+
+private fun isErrorMessage(message: String?): Boolean {
+    if (message.isNullOrBlank()) return false
+    return listOf(
+        "could",
+        "invalid",
+        "failed",
+        "reduction",
+        "error",
+        "mismatch",
+        "unavailable"
+    ).any { message.contains(it, ignoreCase = true) }
 }
