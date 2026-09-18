@@ -20,6 +20,8 @@ import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.model.Move
 import com.cubecraft.solver.model.StickerKey
 import com.cubecraft.solver.scanner.RgbColor
+import com.cubecraft.solver.scanner.StickerGuess
+import com.cubecraft.solver.scanner.canonicalStickerGuesses
 import kotlin.math.roundToInt
 
 @Composable
@@ -28,6 +30,7 @@ fun StudioScreen(
     cube: CubeState,
     revision: Int,
     palette: Map<Face, RgbColor>,
+    colorFaces: Map<StickerGuess, Face>,
     history: List<Move>,
     solution: List<Move>,
     solutionIndex: Int,
@@ -50,7 +53,8 @@ fun StudioScreen(
     var width by remember(size) { mutableIntStateOf(1) }
     var turns by remember { mutableIntStateOf(1) }
     var editMode by remember { mutableStateOf(false) }
-    var paintColor by remember { mutableStateOf(Face.F) }
+    var paintGuess by remember { mutableStateOf(StickerGuess.GREEN) }
+    val paintColor = colorFaces[paintGuess] ?: Face.F
     val guided = canReturnToScan && (size == 3 || size == 5)
 
     Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 12.dp)) {
@@ -103,7 +107,7 @@ fun StudioScreen(
         Spacer(Modifier.height(8.dp))
 
         when {
-            editMode -> PaintPalette(palette, paintColor) { paintColor = it }
+            editMode -> PaintPalette(paintGuess) { paintGuess = it }
             solving -> SolveProgress(size)
             solution.isNotEmpty() -> SolutionPanel(
                 solution,
@@ -275,17 +279,17 @@ private fun SolutionPanel(
 
 @Composable
 private fun PaintPalette(
-    palette: Map<Face, RgbColor>,
-    selected: Face,
-    onSelect: (Face) -> Unit
+    selected: StickerGuess,
+    onSelect: (StickerGuess) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Face.entries.forEach { face ->
-            val color = faceColor(face, palette)
-            val active = selected == face
+        canonicalStickerGuesses.forEach { guess ->
+            val rgb = idealRgbForGuess(guess)
+            val color = Color(rgb.argb())
+            val active = selected == guess
             Surface(
                 modifier = Modifier.weight(1f).height(42.dp),
-                onClick = { onSelect(face) },
+                onClick = { onSelect(guess) },
                 color = color,
                 shape = RoundedCornerShape(3.dp),
                 border = BorderStroke(
@@ -295,7 +299,7 @@ private fun PaintPalette(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        face.symbol.toString(),
+                        guess.label,
                         color = if (color.luminance() > .52f) Color.Black else Color.White,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 9.sp,
