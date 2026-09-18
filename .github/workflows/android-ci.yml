@@ -25,6 +25,17 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Native core test
+        run: |
+          g++ -std=c++20 -O3 -Iapp/src/main/cpp \
+            app/src/main/cpp/five_by_five_core.cpp \
+            app/src/test/cpp/five_by_five_core_test.cpp \
+            -o /tmp/cubik555-test
+          /tmp/cubik555-test
+
+      - name: Android NDK
+        run: sdkmanager "ndk;27.0.12077973"
+
       - name: Compile, unit tests and debug APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
 
