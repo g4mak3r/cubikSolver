@@ -146,30 +146,6 @@ int centerScore(const std::uint8_t* state) {
     return total;
 }
 
-int centerSearchScore(const std::uint8_t* state) {
-    int total = centerScore(state);
-    constexpr std::array<int, 4> xOffsets = {6, 8, 16, 18};
-    constexpr std::array<int, 4> tOffsets = {7, 11, 13, 17};
-
-    for (int face = 0; face < 6; ++face) {
-        const int base = face * 25;
-        const auto target = state[base + 12];
-
-        bool xSolved = true;
-        bool tSolved = true;
-        for (const int offset : xOffsets) {
-            xSolved = xSolved && state[base + offset] == target;
-        }
-        for (const int offset : tOffsets) {
-            tSolved = tSolved && state[base + offset] == target;
-        }
-
-        if (xSolved) total += 2;
-        if (tSolved) total += 2;
-    }
-    return total;
-}
-
 bool centersSolved(const std::uint8_t* state) {
     return centerScore(state) == 54;
 }
@@ -205,7 +181,7 @@ void applyPerm(
 
 int score(const std::uint8_t* state, ScoreMode mode) {
     return mode == ScoreMode::Centers
-        ? centerSearchScore(state)
+        ? centerScore(state)
         : edgeSearchScore(state);
 }
 
