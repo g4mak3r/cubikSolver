@@ -1,5 +1,6 @@
 package com.cubecraft.solver.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,8 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.*
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,108 +21,120 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
     var selected by remember { mutableIntStateOf(3) }
 
     Column(
-        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 20.dp),
+        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(28.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.background(AccentSoft, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 11.dp, vertical = 7.dp)
-            ) {
-                Text("OFFLINE · CAMERA SOLVER", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
+        Spacer(Modifier.height(20.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "CUBIK/SOLVER",
+                color = Ink,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = .8.sp
+            )
             Spacer(Modifier.weight(1f))
-            Text("v${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "v" + BuildConfig.VERSION_NAME + "  //  OFFLINE",
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp
+            )
         }
-
-        Spacer(Modifier.height(28.dp))
-        Text("cubikSolver", fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp, color = InkSoft)
         Spacer(Modifier.height(8.dp))
-        Text("Your cube,\nreconstructed.", fontSize = 38.sp, lineHeight = 40.sp, fontWeight = FontWeight.Black, color = Ink)
+        HorizontalDivider(color = Outline, thickness = 1.dp)
+
+        Spacer(Modifier.weight(.72f))
+        Text(
+            "CUBIK",
+            color = Ink,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 45.sp,
+            lineHeight = 45.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp
+        )
+        Text(
+            "SOLVER",
+            color = Accent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 45.sp,
+            lineHeight = 45.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp
+        )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Scan six faces, inspect the digital twin, then solve with visual guidance.",
-            color = Muted, fontSize = 14.sp, lineHeight = 20.sp
+            "CAMERA  /  RECONSTRUCT  /  SOLVE",
+            color = Muted,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+            letterSpacing = .65.sp
         )
 
-        Spacer(Modifier.height(26.dp))
-        Text("CUBE SIZE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(36.dp))
         Row(
-            Modifier.fillMaxWidth().background(Panel2, RoundedCornerShape(16.dp)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Modifier.fillMaxWidth().border(1.dp, InkSoft, RoundedCornerShape(5.dp)).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             listOf(3, 5).forEach { n ->
                 val active = selected == n
-                Surface(
-                    modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(13.dp)).clickable { selected = n },
-                    color = if (active) Panel else androidx.compose.ui.graphics.Color.Transparent,
-                    shadowElevation = if (active) 2.dp else 0.dp,
-                    shape = RoundedCornerShape(13.dp)
+                Box(
+                    Modifier.weight(1f).height(50.dp)
+                        .background(if (active) Ink else AppBg, RoundedCornerShape(3.dp))
+                        .clickable { selected = n },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("$n × $n", color = if (active) Ink else Muted, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text(
+                        n.toString() + " × " + n,
+                        color = if (active) Panel else Ink,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        PrimaryActionCard(
-            title = "Scan a real cube",
-            body = "Guided camera grid. Confirm every captured face before moving to the next one.",
-            action = "START 6-FACE SCAN",
-            onClick = { onScan(selected) }
-        )
-        Spacer(Modifier.height(10.dp))
-        SecondaryActionCard(
-            title = "Virtual lab",
-            body = "Rotate the model, test legal moves, undo, redo and preview solver guidance.",
-            action = "OPEN DIGITAL CUBE",
-            onClick = { onVirtual(selected) }
-        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { onScan(selected) },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(5.dp)
+        ) {
+            Text(
+                "SCAN REAL CUBE  →",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = .5.sp
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { onVirtual(selected) },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(5.dp),
+            border = BorderStroke(1.dp, InkSoft)
+        ) {
+            Text(
+                "OPEN VIRTUAL CUBE",
+                color = Ink,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
         Spacer(Modifier.weight(1f))
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("ANDROID 10+", color = Muted, fontSize = 10.sp)
-            Text("NO GOOGLE SERVICES", color = Muted, fontSize = 10.sp)
-            Text("OFFLINE", color = Success, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun PrimaryActionCard(title: String, body: String, action: String, onClick: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Accent)
-            .clickable(onClick = onClick).padding(20.dp)
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(title, color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                Spacer(Modifier.height(6.dp))
-                Text(body, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .82f), fontSize = 13.sp, lineHeight = 18.sp)
-            }
-            Text("↗", color = androidx.compose.ui.graphics.Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(18.dp))
-        Text(action, color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = .8.sp)
-    }
-}
-
-@Composable
-private fun SecondaryActionCard(title: String, body: String, action: String, onClick: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Panel)
-            .border(1.dp, Outline, RoundedCornerShape(24.dp)).clickable(onClick = onClick).padding(20.dp)
-    ) {
-        Text(title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-        Spacer(Modifier.height(6.dp))
-        Text(body, color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
-        Spacer(Modifier.height(16.dp))
-        Text(action, color = Accent, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = .8.sp)
+        Text(
+            "LOCAL CV  //  NO CLOUD  //  ANDROID 10+",
+            color = Muted,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 8.sp,
+            letterSpacing = .35.sp
+        )
+        Spacer(Modifier.height(20.dp))
     }
 }
