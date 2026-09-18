@@ -357,7 +357,8 @@ private fun ScanArOverlay(n: Int, observation: FaceObservation?) {
                 val cellWidth = (offsetDistance(p10, p00) + offsetDistance(p11, p01)) * .5f
                 val cellHeight = (offsetDistance(p01, p00) + offsetDistance(p11, p10)) * .5f
                 val radius = minOf(cellWidth, cellHeight) * if (n == 3) .16f else .19f
-                val chipColor = Color(sticker.rgb.argb())
+                val displayRgb = idealRgbForGuess(sticker.guess)
+                val chipColor = Color(displayRgb.argb())
                 drawCircle(Color.Black.copy(alpha = .42f), radius + 3.5f, center)
                 drawCircle(chipColor.copy(alpha = .94f), radius, center)
                 if (sticker.confidence < .56f) {
@@ -369,7 +370,7 @@ private fun ScanArOverlay(n: Int, observation: FaceObservation?) {
                     )
                 }
 
-                val luminance = (.2126 * sticker.rgb.r + .7152 * sticker.rgb.g + .0722 * sticker.rgb.b) / 255.0
+                val luminance = (.2126 * displayRgb.r + .7152 * displayRgb.g + .0722 * displayRgb.b) / 255.0
                 val paint = AndroidPaint().apply {
                     isAntiAlias = true
                     color = if (luminance > .58) android.graphics.Color.BLACK else android.graphics.Color.WHITE
