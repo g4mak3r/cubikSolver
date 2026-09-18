@@ -22,8 +22,8 @@ android {
         applicationId = "com.cubecraft.solver"
         minSdk = 29
         targetSdk = 35
-        versionCode = 24
-        versionName = "0.8.2"
+        versionCode = 25
+        versionName = "0.8.3"
         vectorDrawables { useSupportLibrary = true }
     }
 
