@@ -59,7 +59,7 @@ fun Cube3D(
     Canvas(gestures) {
         val n=cube.size
         val center=Offset(size.width/2,size.height/2)
-        val base=size.minDimension*.72f*zoom
+        val base=size.minDimension*.70f*zoom
         fun cellCoord(i:Int)=(-.5f+(i+.5f)/n)
         fun rotateGhost(v:V3,key:StickerKey):V3 {
             val m=highlight?:return v
@@ -116,21 +116,86 @@ fun Cube3D(
             return camera(v).z>0f
         }
 
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Accent.copy(alpha = .10f), Color.Transparent),
+                center = center,
+                radius = base * .78f
+            ),
+            radius = base * .78f,
+            center = center
+        )
+
+        fun shellNormal(face: Face): V3 = when(face) {
+            Face.F -> V3(0f,0f,1f)
+            Face.B -> V3(0f,0f,-1f)
+            Face.U -> V3(0f,1f,0f)
+            Face.D -> V3(0f,-1f,0f)
+            Face.R -> V3(1f,0f,0f)
+            Face.L -> V3(-1f,0f,0f)
+        }
+
+        fun shellQuad(face: Face, h: Float): List<V3> = when(face) {
+            Face.F -> listOf(V3(-h,-h,h),V3(h,-h,h),V3(h,h,h),V3(-h,h,h))
+            Face.B -> listOf(V3(h,-h,-h),V3(-h,-h,-h),V3(-h,h,-h),V3(h,h,-h))
+            Face.U -> listOf(V3(-h,h,h),V3(h,h,h),V3(h,h,-h),V3(-h,h,-h))
+            Face.D -> listOf(V3(-h,-h,-h),V3(h,-h,-h),V3(h,-h,h),V3(-h,-h,h))
+            Face.R -> listOf(V3(h,-h,h),V3(h,-h,-h),V3(h,h,-h),V3(h,h,h))
+            Face.L -> listOf(V3(-h,-h,-h),V3(-h,-h,h),V3(-h,h,h),V3(-h,h,-h))
+        }
+
         val polys=mutableListOf<Poly>()
         val hits=mutableListOf<StickerHit>()
+
+        Face.entries.forEach { face ->
+            if (camera(shellNormal(face)).z > 0f) {
+                val q3 = shellQuad(face, .455f)
+                val q = q3.map { project(camera(it)) }
+                val depth = q3.map { camera(it).z }.average().toFloat()
+                val shade = when(face) {
+                    Face.U -> MetalLight
+                    Face.F, Face.R -> Metal
+                    else -> MetalDark
+                }
+                polys += Poly(q, depth - .02f, shade, MetalLight.copy(alpha = .7f), 1.2f)
+            }
+        }
         for(st in stickers){
             if(!normalVisible(st.key)) continue
             val hi=highlight?.let{inMove(st.key,it,n)}==true
-            val dark3 = quad(st.key,.49f/n,0f)
-            val dark=dark3.map{ project(camera(rotateGhost(it,st.key))) }
-            val darkDepth=dark3.map{camera(rotateGhost(it,st.key)).z}.average().toFloat()
-            polys+=Poly(dark,darkDepth,Color(0xFF090A0C),if(hi) Accent else Color.Black,if(hi) 4f else 1f)
+            val outer3 = quad(st.key,.505f/n,-.006f)
+            val outer = outer3.map { project(camera(rotateGhost(it,st.key))) }
+            val outerDepth = outer3.map { camera(rotateGhost(it,st.key)).z }.average().toFloat()
+            polys += Poly(
+                outer,
+                outerDepth,
+                MetalDark,
+                if (hi) Accent.copy(alpha = .85f) else MetalLight,
+                if (hi) 3.4f else 1.2f
+            )
 
-            val sticker3 = quad(st.key,.405f/n,.006f)
-            val q=sticker3.map{ project(camera(rotateGhost(it,st.key))) }
-            val dep=sticker3.map{camera(rotateGhost(it,st.key)).z}.average().toFloat()
-            val paintStroke = if (paintColor != null) Color.White.copy(alpha=.75f) else Color(0x33000000)
-            polys+=Poly(q,dep,faceColor(st.color,palette),if(hi) Accent.copy(alpha=.9f) else paintStroke,if(hi) 3f else if(paintColor!=null) 1.8f else 1f)
+            val body3 = quad(st.key,.474f/n,-.001f)
+            val body = body3.map { project(camera(rotateGhost(it,st.key))) }
+            val bodyDepth = body3.map { camera(rotateGhost(it,st.key)).z }.average().toFloat()
+            polys += Poly(body, bodyDepth, Metal, MetalLight.copy(alpha = .72f), 1f)
+
+            val stickerColor = faceColor(st.color,palette)
+            val glow3 = quad(st.key,.425f/n,.005f)
+            val glow = glow3.map { project(camera(rotateGhost(it,st.key))) }
+            val glowDepth = glow3.map { camera(rotateGhost(it,st.key)).z }.average().toFloat()
+            polys += Poly(glow, glowDepth, stickerColor.copy(alpha = .20f), stickerColor.copy(alpha = .32f), 2f)
+
+            val sticker3 = quad(st.key,.385f/n,.009f)
+            val q = sticker3.map { project(camera(rotateGhost(it,st.key))) }
+            val dep = sticker3.map { camera(rotateGhost(it,st.key)).z }.average().toFloat()
+            val paintStroke = if (paintColor != null) Color.White.copy(alpha=.75f) else stickerColor.copy(alpha=.42f)
+            polys += Poly(
+                q,
+                dep,
+                stickerColor,
+                if (hi) Color.White.copy(alpha=.92f) else paintStroke,
+                if (hi) 2.8f else if (paintColor != null) 1.6f else .9f
+            )
             hits += StickerHit(st.key, q, dep)
         }
         hitPolys.set(hits)
@@ -144,8 +209,7 @@ fun Cube3D(
             drawPath(path,p.stroke,style=Stroke(p.strokeWidth))
         }
 
-        // Explicit directional guide. The ghost motion shows the layer moving; this arrow removes
-        // any ambiguity about clockwise vs counter-clockwise when the cube is viewed obliquely.
+
         highlight?.let { move ->
             fun faceNormal(face: Face): V3 = when(face) {
                 Face.F -> V3(0f,0f,1f)
@@ -156,7 +220,7 @@ fun Cube3D(
                 Face.L -> V3(-1f,0f,0f)
             }
             fun facePoint(face: Face, u: Float, v: Float, outward: Float = .565f): V3 = when(face) {
-                // u = right and v = up while looking straight at the named face from outside.
+
                 Face.F -> V3(u, v, outward)
                 Face.B -> V3(-u, v, -outward)
                 Face.U -> V3(u, outward, -v)
@@ -217,8 +281,7 @@ fun Cube3D(
                 )
                 drawHead(points[points.lastIndex-1], points.last())
 
-                // A half-turn has no meaningful CW/CCW distinction. A second small head makes
-                // the required 180-degree motion visually obvious without adding text over the cube.
+
                 if (move.quarterTurns == 2) {
                     val mid = samples/2
                     drawHead(points[mid-1], points[mid])
