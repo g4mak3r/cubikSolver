@@ -287,6 +287,10 @@ internal object FiveByFiveMacroReduction {
                     }
                 }
 
+                if (step == null && before >= target - DEEP_WINDOW) {
+                    step = beamRescue(state, target, score, legal, operators, finishers, deep)
+                }
+
                 if (step == null) {
                     stalls++
                     val allowance = when {
@@ -316,6 +320,62 @@ internal object FiveByFiveMacroReduction {
 
             lastAttemptBest = best
             return partial()
+        }
+
+        private data class BeamNode(
+            val state: ByteArray,
+            val moves: List<Move>,
+            val value: Int
+        )
+
+        /** Bounded look-ahead for the last centres / last paired edges. */
+        private fun beamRescue(
+            start: ByteArray,
+            target: Int,
+            score: (ByteArray) -> Int,
+            legal: (ByteArray) -> Boolean,
+            operators: List<Operator>,
+            finishers: List<Operator>,
+            deep: Boolean
+        ): List<Move>? {
+            val base = score(start)
+            val alphabet = buildList {
+                addAll(finishers.take(if (deep) 260 else 420))
+                addAll(operators.take(if (deep) 220 else 300))
+            }.distinctBy { PermKey(it.perm) }
+            if (alphabet.isEmpty()) return null
+
+            var frontier = listOf(BeamNode(start.copyOf(), emptyList(), base))
+            var best: BeamNode? = null
+            val seen = HashSet<Int>()
+            seen += start.contentHashCode()
+
+            repeat(if (deep) 3 else 4) {
+                if (outOfTime()) return best?.moves
+                val next = ArrayList<BeamNode>()
+                for (node in frontier) for (op in alphabet) {
+                    if (outOfTime()) return best?.moves
+                    val candidate = ByteArray(FACELETS)
+                    model.applyPerm(node.state, op.perm, candidate)
+                    if (!legal(candidate)) continue
+                    val value = score(candidate)
+                    if (value < base - if (deep) 2 else 3) continue
+                    if (!seen.add(candidate.contentHashCode())) continue
+                    val moves = simplify(node.moves + op.moves)
+                    if (value >= target) return moves
+                    val item = BeamNode(candidate, moves, value)
+                    if (value > base && (best == null || value > best!!.value ||
+                            (value == best!!.value && moves.size < best!!.moves.size))) {
+                        best = item
+                    }
+                    next += item
+                }
+                if (next.isEmpty()) return best?.moves
+                frontier = next.sortedWith(
+                    compareByDescending<BeamNode> { it.value }.thenBy { it.moves.size }
+                ).take(if (deep) 72 else 96)
+            }
+            return best?.moves
         }
 
         private fun findOperator(
