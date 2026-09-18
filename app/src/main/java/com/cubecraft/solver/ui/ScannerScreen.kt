@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,23 +89,40 @@ fun ScannerScreen(
     Column(Modifier.fillMaxSize().background(AppBg).padding(horizontal = 18.dp)) {
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
-                Text("‹  BACK", color = InkSoft, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+                Text("← HOME", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.background(AccentSoft, RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-                Text("FACE ${index + 1} / 6", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
-            }
+            Text(
+                "FACE " + (index + 1).toString().padStart(2, '0') + " / 06",
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp
+            )
         }
 
-        Text("Scan ${pose.title.lowercase()}", color = Ink, fontSize = 29.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(4.dp))
-        Text(pose.instruction, color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            pose.title.uppercase(),
+            color = Ink,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            pose.instruction,
+            color = Muted,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            lineHeight = 14.sp,
+            maxLines = 2
+        )
 
         Spacer(Modifier.height(12.dp))
         Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(26.dp))
-                .background(Color(0xFF111722)).border(1.dp, Outline, RoundedCornerShape(26.dp))
+            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(7.dp))
+                .background(Viewport).border(1.dp, InkSoft, RoundedCornerShape(7.dp))
         ) {
             if (granted) {
                 CameraPreview(
@@ -113,7 +131,6 @@ fun ScannerScreen(
                         if (obs != null && obs.timestampMs >= acceptFramesAfter) {
                             latest = obs
                             if (pendingCapture) {
-                                // Consume exactly one frame for the user's queued capture tap.
                                 pendingCapture = false
                                 onCapture(obs)
                             }
@@ -123,36 +140,33 @@ fun ScannerScreen(
                 )
                 ScanArOverlay(gridSize, latest)
 
-                // Small explanation inside the camera viewport; tracking is an enhancement, not a gate.
-                Surface(
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
-                    color = Color(0xC9182333),
-                    shape = RoundedCornerShape(999.dp)
-                ) {
-                    Text(
-                        when {
-                            pendingCapture -> "CAPTURE QUEUED · HOLD STILL"
-                            latest?.tracked == true -> "AR FACE OUTLINE · FIXED SCAN GRID"
-                            latest != null -> "FIXED SCAN GRID · LIVE COLOR"
-                            else -> "STARTING LIVE ANALYSIS"
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
+                Text(
+                    when {
+                        pendingCapture -> "HOLD STILL / QUEUED"
+                        latest?.tracked == true -> "FACE LOCK"
+                        latest != null -> "GRID LIVE"
+                        else -> "CAMERA INIT"
+                    },
+                    modifier = Modifier.align(Alignment.TopStart)
+                        .padding(10.dp)
+                        .background(CameraChrome, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold
+                )
             } else {
                 Column(
                     Modifier.fillMaxSize().padding(28.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Camera access is required", color = Color.White, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(7.dp))
-                    Text("Frames are processed locally on the phone.", color = Color.White.copy(alpha = .7f), fontSize = 12.sp)
-                    Spacer(Modifier.height(14.dp))
-                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("ALLOW CAMERA") }
+                    Text("CAMERA PERMISSION", color = Color.White, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }, shape = RoundedCornerShape(4.dp)) {
+                        Text("ALLOW", fontFamily = FontFamily.Monospace)
+                    }
                 }
             }
         }
@@ -160,76 +174,51 @@ fun ScannerScreen(
         Spacer(Modifier.height(10.dp))
         val observation = latest
         val uncertain = observation?.uncertainCount ?: 0
-        Surface(
-            color = Panel,
-            shape = RoundedCornerShape(17.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Outline)
-        ) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(9.dp).background(
-                        when {
-                            cameraError != null -> Danger
-                            observation?.tracked == true -> Success
-                            observation != null -> Accent
-                            else -> Muted
-                        }, RoundedCornerShape(99.dp)
-                    )
-                )
-                Spacer(Modifier.width(9.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when {
-                            cameraError != null -> "CAMERA ERROR"
-                            pendingCapture -> "WAITING FOR NEXT FRAME"
-                            observation?.tracked == true -> "WHOLE FACE FOUND"
-                            observation != null -> "FIXED GRID ACTIVE"
-                            else -> "CAMERA STARTING"
-                        },
-                        color = if (cameraError != null) Danger else InkSoft,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        when {
-                            cameraError != null -> cameraError!!
-                            observation == null -> "You can press Capture immediately; it will use the next live frame."
-                            uncertain > 0 -> "$uncertain cell${if (uncertain == 1) "" else "s"} look uncertain. Yellow/red cells are warnings only - capture is still allowed."
-                            observation.tracked -> "The teal outline follows the whole face, but capture colors always come from the fixed white grid."
-                            else -> "Align the entire face to the fixed white grid. AR is optional and never changes capture scale."
-                        },
-                        color = Muted,
-                        fontSize = 10.sp,
-                        lineHeight = 14.sp
-                    )
-                }
-                observation?.let {
-                    Text("${(it.quality * 100).toInt()}%", color = Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+        val statusColor = when {
+            cameraError != null -> Danger
+            observation?.tracked == true -> Success
+            observation != null -> Accent
+            else -> Muted
+        }
+        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).background(statusColor, RoundedCornerShape(1.dp)))
+            Spacer(Modifier.width(7.dp))
+            Text(
+                when {
+                    cameraError != null -> "CAMERA ERROR / " + cameraError
+                    pendingCapture -> "WAITING FOR FRAME"
+                    observation?.tracked == true -> "TRACKED"
+                    observation != null -> "GRID READY"
+                    else -> "STARTING"
+                },
+                color = if (cameraError != null) Danger else InkSoft,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp,
+                maxLines = 1
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Q " + ((observation?.quality ?: 0f) * 100).toInt() + "  /  ? " + uncertain,
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp
+            )
         }
 
         Spacer(Modifier.weight(1f))
         Button(
             onClick = { captureNowOrNextFrame() },
             enabled = granted && cameraError == null,
-            modifier = Modifier.fillMaxWidth().height(57.dp),
-            shape = RoundedCornerShape(17.dp)
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(5.dp)
         ) {
             Text(
-                if (pendingCapture) "CAPTURE QUEUED…" else "CAPTURE ${pose.title}",
-                fontWeight = FontWeight.Black,
-                fontSize = 12.sp
+                if (pendingCapture) "CAPTURE QUEUED…" else "CAPTURE →",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp
             )
         }
-        Spacer(Modifier.height(7.dp))
-        Text(
-            "The fixed white grid is authoritative. AR can never shrink capture to a single sticker.",
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            color = Muted,
-            fontSize = 9.sp,
-            lineHeight = 13.sp
-        )
         Spacer(Modifier.height(12.dp))
     }
 }
