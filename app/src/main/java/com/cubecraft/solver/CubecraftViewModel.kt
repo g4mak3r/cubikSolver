@@ -18,6 +18,7 @@ class CubecraftViewModel : ViewModel() {
     var cube by mutableStateOf(CubeState(3)); private set
     var revision by mutableIntStateOf(0); private set
     var palette by mutableStateOf<Map<Face,RgbColor>>(emptyMap()); private set
+    var colorFaces by mutableStateOf(defaultColorFaces()); private set
     var scanIndex by mutableIntStateOf(0); private set
     var scanQuality by mutableFloatStateOf(0f); private set
     var frontCenterGuess by mutableStateOf<StickerGuess?>(null); private set
@@ -45,6 +46,15 @@ class CubecraftViewModel : ViewModel() {
     private val five = FiveByFiveSolver()
     private val validator = CubeValidator(three)
 
+    private fun defaultColorFaces(): Map<StickerGuess, Face> = mapOf(
+        StickerGuess.WHITE to Face.U,
+        StickerGuess.YELLOW to Face.D,
+        StickerGuess.RED to Face.R,
+        StickerGuess.ORANGE to Face.L,
+        StickerGuess.GREEN to Face.F,
+        StickerGuess.BLUE to Face.B
+    )
+
     val currentPose: ScanPose get() {
         val base = scanSequence[scanIndex.coerceIn(0,5)]
         val label = frontCenterGuess?.displayName?.takeIf { it != "COLOR" } ?: "SAVED"
@@ -66,7 +76,8 @@ class CubecraftViewModel : ViewModel() {
         cubeSize = size
         cube = CubeState(size)
         revision++
-        palette = emptyMap()
+        palette = defaultPalette
+        colorFaces = defaultColorFaces()
         baseline = null
         pendingFaceObservation = null
         pendingFaceOverrides = emptyMap()
@@ -81,6 +92,7 @@ class CubecraftViewModel : ViewModel() {
     fun beginScan(size: Int) {
         cubeSize = size
         captures.clear()
+        colorFaces = defaultColorFaces()
         scanIndex = 0
         scanQuality = 0f
         frontCenterGuess = null
@@ -213,6 +225,7 @@ class CubecraftViewModel : ViewModel() {
 
         reviewFaces = resolvedFaces
         palette = classified.palette
+        colorFaces = classified.colorFaces
         cube = builtCube
         revision++
         validation = null
@@ -369,7 +382,8 @@ class CubecraftViewModel : ViewModel() {
         clearSolution()
         originSolved = true
         baseline = null
-        palette = emptyMap()
+        palette = defaultPalette
+        colorFaces = defaultColorFaces()
         revision++
     }
 
