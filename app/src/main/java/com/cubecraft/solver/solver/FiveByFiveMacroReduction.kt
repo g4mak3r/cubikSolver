@@ -249,8 +249,6 @@ internal object FiveByFiveMacroReduction {
                     lastAttemptBest = best
                     stalls = 0
                 }
-                // Keep the newest equal-score plateau as well. It is often a better launch point
-                // for the next attempt than the first position that happened to reach this score.
                 bestState = state.copyOf()
                 bestMoves = simplify(out.toList())
             }
@@ -266,31 +264,53 @@ internal object FiveByFiveMacroReduction {
 
                 var step = shortSearch.find(state) { candidate ->
                     legal(candidate) && score(candidate) > before
-                } ?: findOperator(state, operators, wrappersOne) { candidate ->
-                    legal(candidate) && score(candidate) > before
-                }
+                } ?: findImprovingOperator(
+                    state = state,
+                    operators = operators,
+                    wrappers = wrappersOne,
+                    before = before,
+                    deep = deep,
+                    fallback = { candidate -> legal(candidate) && score(candidate) > before }
+                )
 
-                // centreFine used to be built but never queried because the old code gated every
-                // finisher behind deep=true (which is only used by edge pairing). That is exactly
-                // where real scans tended to die at 51-53/54 centres. Use the dedicated tail pool
-                // for both stages once we are close to the target.
                 val rescueWindow = if (deep) 240 else DEEP_WINDOW
                 if (step == null && before >= target - rescueWindow && finishers.isNotEmpty()) {
-                    step = findOperator(state, finishers, wrappersOne) { candidate ->
-                        legal(candidate) && score(candidate) > before
-                    } ?: findOperator(state, narrowSlice(finishers), wrappersTwo) { candidate ->
+                    step = findImprovingOperator(
+                        state = state,
+                        operators = finishers,
+                        wrappers = wrappersOne,
+                        before = before,
+                        deep = deep,
+                        fallback = { candidate -> legal(candidate) && score(candidate) > before }
+                    ) ?: findOperator(
+                        state,
+                        narrowSlice(finishers),
+                        wrappersTwo
+                    ) { candidate ->
                         legal(candidate) && score(candidate) > before
                     }
                 }
 
                 if (step == null && deep && before >= target - rescueWindow) {
-                    step = findOperator(state, narrowSlice(operators), wrappersTwo) { candidate ->
+                    step = findOperator(
+                        state,
+                        narrowSlice(operators),
+                        wrappersTwo
+                    ) { candidate ->
                         legal(candidate) && score(candidate) > before
                     }
                 }
 
                 if (step == null && before >= target - rescueWindow) {
-                    step = beamRescue(state, target, score, legal, operators, finishers, deep)
+                    step = beamRescue(
+                        state,
+                        target,
+                        score,
+                        legal,
+                        operators,
+                        finishers,
+                        deep
+                    )
                 }
 
                 if (step == null) {
@@ -300,19 +320,42 @@ internal object FiveByFiveMacroReduction {
                         stalls < 40 -> 1
                         else -> 2
                     }
-                    step = bestSideways(state, operators, wrappersOne, before, allowance, legal, score)
-                        ?: bestSideways(state, finishers, wrappersOne, before, allowance, legal, score)
-                        ?: bestSideways(state, operators, wrappersNone, before, allowance, legal, score)
-                        ?: run {
-                            lastAttemptBest = best
-                            return partial()
-                        }
+                    step = bestSidewaysFast(
+                        state,
+                        operators,
+                        wrappersOne,
+                        before,
+                        allowance,
+                        deep,
+                        legal,
+                        score
+                    ) ?: bestSidewaysFast(
+                        state,
+                        finishers,
+                        wrappersOne,
+                        before,
+                        allowance,
+                        deep,
+                        legal,
+                        score
+                    ) ?: bestSidewaysFast(
+                        state,
+                        operators,
+                        wrappersNone,
+                        before,
+                        allowance,
+                        deep,
+                        legal,
+                        score
+                    ) ?: run {
+                        lastAttemptBest = best
+                        return partial()
+                    }
                 }
 
                 state = model.applyMoves(state, step)
                 out += step
-                val after = score(state)
-                snapshotBest(after)
+                snapshotBest(score(state))
 
                 if (stalls > MAX_STALLS || out.size > MAX_STAGE_MOVES) {
                     lastAttemptBest = best
@@ -322,6 +365,89 @@ internal object FiveByFiveMacroReduction {
 
             lastAttemptBest = best
             return partial()
+        }
+
+        private fun findImprovingOperator(
+            state: ByteArray,
+            operators: List<Operator>,
+            wrappers: List<Wrapper>,
+            before: Int,
+            deep: Boolean,
+            fallback: (ByteArray) -> Boolean
+        ): List<Move>? {
+            val native = pool.nativeFor(operators)
+            if (native != null) {
+                val mode = if (deep) {
+                    NativeFiveByFiveKernel.MODE_EDGES
+                } else {
+                    NativeFiveByFiveKernel.MODE_CENTERS
+                }
+                for (wrap in wrappers) {
+                    if (outOfTime()) return null
+                    val staged = stage(state, wrap.setup)
+                    val index = native.findFirstImproving(
+                        staged,
+                        wrap.undo,
+                        mode,
+                        before,
+                        deep
+                    )
+                    if (index >= 0) {
+                        return buildSequence(wrap, operators[index])
+                    }
+                }
+                return null
+            }
+            return findOperator(state, operators, wrappers, fallback)
+        }
+
+        private fun bestSidewaysFast(
+            state: ByteArray,
+            operators: List<Operator>,
+            wrappers: List<Wrapper>,
+            before: Int,
+            allowance: Int,
+            deep: Boolean,
+            legal: (ByteArray) -> Boolean,
+            score: (ByteArray) -> Int
+        ): List<Move>? {
+            val native = pool.nativeFor(operators)
+            if (native != null) {
+                val mode = if (deep) {
+                    NativeFiveByFiveKernel.MODE_EDGES
+                } else {
+                    NativeFiveByFiveKernel.MODE_CENTERS
+                }
+                val floor = before - allowance
+                var bestScore = Int.MIN_VALUE
+                var selected: List<Move>? = null
+
+                for (wrap in wrappers) {
+                    if (outOfTime()) return selected
+                    val staged = stage(state, wrap.setup)
+                    val result = native.findBest(
+                        staged,
+                        wrap.undo,
+                        mode,
+                        floor,
+                        deep
+                    ) ?: continue
+                    if (result.score > bestScore) {
+                        bestScore = result.score
+                        selected = buildSequence(wrap, operators[result.index])
+                    }
+                }
+                return selected
+            }
+            return bestSideways(
+                state,
+                operators,
+                wrappers,
+                before,
+                allowance,
+                legal,
+                score
+            )
         }
 
         private data class BeamNode(
@@ -689,6 +815,29 @@ internal object FiveByFiveMacroReduction {
             centreFine = refineCentre(narrow, reference)
             edgeFinishers = buildEdgeFinishers(safe, reference)
         }
+
+        private val nativeCentreSafe by lazy {
+            NativeFiveByFiveKernel.createPool(centreSafe.map { it.perm })
+        }
+        private val nativeNarrowCentre by lazy {
+            NativeFiveByFiveKernel.createPool(narrowCentre.map { it.perm })
+        }
+        private val nativeCentreFine by lazy {
+            NativeFiveByFiveKernel.createPool(centreFine.map { it.perm })
+        }
+        private val nativeEdgeFinishers by lazy {
+            NativeFiveByFiveKernel.createPool(edgeFinishers.map { it.perm })
+        }
+
+        fun nativeFor(operators: List<Operator>): NativeFiveByFiveKernel.Pool? =
+            when {
+                operators === centreSafe -> nativeCentreSafe
+                operators === narrowCentre -> nativeNarrowCentre
+                operators === centreFine -> nativeCentreFine
+                operators === edgeFinishers -> nativeEdgeFinishers
+                else -> null
+            }
+
 
         private fun buildOuterAtoms(): List<Atom> = buildList {
             for (face in Face.entries) for (turns in 1..3) add(atom(listOf(Move(face, 1, turns)), layerKey(face, 1, false)))
