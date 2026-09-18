@@ -23,11 +23,11 @@ data class LiveSticker(
 data class FaceObservation(
     val samples: List<ColorSample>,
     val quality: Float,
-    /** True only when a new contour was detected in this exact frame. */
+    
     val detected: Boolean,
-    /** True while the AR tracker owns a quadrilateral, including a short loss grace period. */
+    
     val tracked: Boolean = detected,
-    /** TL, TR, BR, BL in normalized analysis-frame coordinates. */
+    
     val corners: List<NormalizedPoint>? = null,
     val frameWidth: Int = 0,
     val frameHeight: Int = 0,
@@ -41,9 +41,9 @@ data class CapturedFace(
     val face: Face,
     val samples: List<ColorSample>,
     val quality: Float,
-    /** Raw per-cell camera guesses, retained so manual edits can be expressed in real color names. */
+    
     val guesses: List<StickerGuess> = emptyList(),
-    /** Explicit user corrections made on the per-face confirmation screen. */
+    
     val manualGuesses: Map<Int, StickerGuess> = emptyMap(),
     val rotationQuarterTurns: Int = 0
 ) {
@@ -93,5 +93,6 @@ data class CapturedFace(
 data class ClassifiedScan(
     val faces: Map<Face, List<Face>>,
     val palette: Map<Face, RgbColor>,
+    val colorFaces: Map<StickerGuess, Face>,
     val meanDistance: Double
 )
