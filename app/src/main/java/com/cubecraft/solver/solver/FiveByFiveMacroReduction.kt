@@ -43,9 +43,12 @@ internal object FiveByFiveMacroReduction {
     private val model by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { Model() }
     private val pool by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { OperatorPool(model) }
 
+    fun prewarm() {
+        pool.prewarmNative()
+    }
+
     fun solve(state: CubeState, budgetMillis: Long = 25_000L): Result {
         require(state.size == N) { "5x5 reduction expects CubeState(5)" }
-        // Pool construction is process-cached and deliberately outside the per-position budget.
         val prepared = pool
         val start = model.flatState(state)
         return Session(
@@ -887,6 +890,18 @@ internal object FiveByFiveMacroReduction {
                 operators === narrowEdgeFinishersOps -> nativeNarrowEdgeFinishers
                 else -> null
             }
+
+        fun prewarmNative() {
+            if (!NativeFiveByFiveKernel.available) return
+            nativeCentreSafe
+            nativeNarrowCentre
+            nativeCentreFine
+            nativeEdgeFinishers
+            nativeNarrowCentreSafe
+            nativeNarrowNarrowCentre
+            nativeNarrowCentreFine
+            nativeNarrowEdgeFinishers
+        }
 
 
         private fun buildOuterAtoms(): List<Atom> = buildList {
