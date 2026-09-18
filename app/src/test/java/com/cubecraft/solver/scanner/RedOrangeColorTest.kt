@@ -1,36 +1,43 @@
 package com.cubecraft.solver.scanner
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RedOrangeColorTest {
     @Test
-    fun flameOrangeStaysSeparateFromRed() {
-        val orange = RgbColor(0xFF, 0x21, 0x00)
-        val red = RgbColor(0xC3, 0x1C, 0x25)
-        val of = orange.features()
-        val rf = red.features()
+    fun flameOrangeIsRecognizedAsOrange() {
+        val samples = listOf(
+            RgbColor(255, 33, 0),
+            RgbColor(255, 85, 5),
+            RgbColor(255, 100, 8),
+            RgbColor(255, 132, 0)
+        )
 
-        // Approximate photo-picked colors from the target physical cube.
-        assertTrue("orange must leave the red live-hint bucket", of.hue >= 11.0 && of.hue < 43.0)
-        assertTrue("red must stay in the red live-hint bucket", rf.hue >= 348.0 || rf.hue < 11.0)
-        assertTrue("orange should sit on the warm side of the red/orange axis", of.redOrangeAxis > .035)
-        assertTrue("red should sit on the cool/neutral side of the red/orange axis", rf.redOrangeAxis < .012)
+        samples.forEach {
+            assertEquals(StickerGuess.ORANGE, recognitionGuess(it).first)
+        }
     }
 
     @Test
-    fun finalDistanceSeparatesThePairEvenAtEqualLab() {
-        val lab = LabColor(128.0, 128.0, 128.0)
-        val orange = ColorSample(lab, RgbColor(0xFF, 0x21, 0x00))
-        val red = ColorSample(lab, RgbColor(0xC3, 0x1C, 0x25))
+    fun cubeRedsStayRed() {
+        val samples = listOf(
+            RgbColor(195, 28, 37),
+            RgbColor(225, 28, 35),
+            RgbColor(235, 25, 35),
+            RgbColor(255, 0, 0)
+        )
 
-        assertTrue(cubeColorDistance(orange, orange) < cubeColorDistance(orange, red))
-        assertTrue(cubeColorDistance(red, red) < cubeColorDistance(red, orange))
+        samples.forEach {
+            assertEquals(StickerGuess.RED, recognitionGuess(it).first)
+        }
     }
 
-    @Test fun canonicalDisplayOrangeIsVisuallyDistinctFromRed() {
+    @Test
+    fun canonicalDisplayOrangeIsVisuallyDistinctFromRed() {
         val orange = idealDisplayRgb(StickerGuess.ORANGE)
         val red = idealDisplayRgb(StickerGuess.RED)
+
         assertTrue(orange.g - red.g > 70)
         assertTrue(orange.r >= red.r)
         assertTrue(orange.b < red.b)
