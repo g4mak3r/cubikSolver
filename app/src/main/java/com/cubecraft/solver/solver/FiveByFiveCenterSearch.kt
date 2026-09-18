@@ -61,14 +61,12 @@ class FiveByFiveCenterSearch(
             for (turns in 1..3) {
                 add(Action(face, Kind.OUTER, turns, listOf(Move(face, 1, turns))))
 
-                // Wide(face) followed by inverse outer(face) leaves only the adjacent inner slice.
-                val undoOuter = if (turns == 2) 2 else 4 - turns
                 add(
                     Action(
                         face,
                         Kind.INNER,
                         turns,
-                        listOf(Move(face, 2, turns), Move(face, 1, undoOuter))
+                        listOf(Move(face, 1, turns, 2))
                     )
                 )
             }
