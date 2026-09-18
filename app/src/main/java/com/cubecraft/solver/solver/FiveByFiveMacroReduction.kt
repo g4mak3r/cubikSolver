@@ -1073,20 +1073,8 @@ internal object FiveByFiveMacroReduction {
 
     private fun inverseSequence(sequence: List<Move>): List<Move> = sequence.asReversed().map { it.inverse() }
 
-    internal fun simplify(moves: List<Move>): List<Move> {
-        val out = ArrayList<Move>(moves.size)
-        for (move in moves) {
-            val previous = out.lastOrNull()
-            if (previous != null && previous.face == move.face && previous.width == move.width) {
-                val turns = (previous.quarterTurns + move.quarterTurns) % 4
-                out.removeAt(out.lastIndex)
-                if (turns != 0) out += Move(move.face, move.width, turns)
-            } else {
-                out += move
-            }
-        }
-        return out
-    }
+    internal fun simplify(moves: List<Move>): List<Move> =
+        FiveByFiveMoveOptimizer.optimize(moves)
 }
 
 private fun StickerKey.inSlab5(face: Face, width: Int, n: Int): Boolean = when (face) {
