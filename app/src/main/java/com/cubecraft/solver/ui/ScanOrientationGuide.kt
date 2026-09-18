@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.scanner.ScanPose
 import com.cubecraft.solver.scanner.StickerGuess
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -54,25 +55,60 @@ fun ScanOrientationGuide(
     }
 
     LaunchedEffect(index) {
-        when (index) {
-            1, 2, 3 -> yaw.animateTo(
-                targetValue = sideYaw(index),
-                animationSpec = tween(700, easing = FastOutSlowInEasing)
-            )
-            4 -> {
-                yaw.animateTo(
-                    targetValue = BASE_YAW,
-                    animationSpec = tween(720, easing = FastOutSlowInEasing)
-                )
-                pitch.animateTo(
-                    targetValue = TOP_PITCH,
-                    animationSpec = tween(560, easing = FastOutSlowInEasing)
-                )
+        while (true) {
+            when (index) {
+                0 -> {
+                    yaw.snapTo(BASE_YAW)
+                    pitch.snapTo(BASE_PITCH)
+                    delay(2_800L)
+                }
+
+                1, 2, 3 -> {
+                    yaw.snapTo(sideYaw(index - 1))
+                    pitch.snapTo(BASE_PITCH)
+                    delay(700L)
+                    yaw.animateTo(
+                        targetValue = sideYaw(index),
+                        animationSpec = tween(1_150, easing = FastOutSlowInEasing)
+                    )
+                    delay(1_350L)
+                    delay(350L)
+                }
+
+                4 -> {
+                    yaw.snapTo(sideYaw(3))
+                    pitch.snapTo(BASE_PITCH)
+                    delay(700L)
+                    yaw.animateTo(
+                        targetValue = BASE_YAW,
+                        animationSpec = tween(1_050, easing = FastOutSlowInEasing)
+                    )
+                    delay(220L)
+                    pitch.animateTo(
+                        targetValue = TOP_PITCH,
+                        animationSpec = tween(900, easing = FastOutSlowInEasing)
+                    )
+                    delay(1_350L)
+                    delay(350L)
+                }
+
+                5 -> {
+                    yaw.snapTo(BASE_YAW)
+                    pitch.snapTo(TOP_PITCH)
+                    delay(700L)
+                    pitch.animateTo(
+                        targetValue = BASE_PITCH,
+                        animationSpec = tween(650, easing = FastOutSlowInEasing)
+                    )
+                    delay(180L)
+                    pitch.animateTo(
+                        targetValue = BOTTOM_PITCH,
+                        animationSpec = tween(950, easing = FastOutSlowInEasing)
+                    )
+                    delay(1_350L)
+                    delay(350L)
+                }
             }
-            5 -> pitch.animateTo(
-                targetValue = BOTTOM_PITCH,
-                animationSpec = tween(900, easing = FastOutSlowInEasing)
-            )
         }
     }
 
