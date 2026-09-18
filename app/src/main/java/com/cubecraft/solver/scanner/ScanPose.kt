@@ -8,10 +8,10 @@ data class ScanPose(
 )
 
 val scanSequence = listOf(
-    ScanPose(Face.F, "ANY FACE"),
-    ScanPose(Face.R, "TURN LEFT"),
-    ScanPose(Face.B, "TURN LEFT"),
-    ScanPose(Face.L, "TURN LEFT"),
-    ScanPose(Face.U, "FIND TARGET"),
-    ScanPose(Face.D, "FIND TARGET")
+    ScanPose(Face.F, "START WITH ANY FACE"),
+    ScanPose(Face.R, "TURN THE CUBE LEFT"),
+    ScanPose(Face.B, "TURN THE CUBE LEFT"),
+    ScanPose(Face.L, "TURN THE CUBE LEFT"),
+    ScanPose(Face.U, "RETURN TO THE FIRST FACE · TILT UP"),
+    ScanPose(Face.D, "KEEP THE FIRST FACE FRONT · TILT DOWN")
 )

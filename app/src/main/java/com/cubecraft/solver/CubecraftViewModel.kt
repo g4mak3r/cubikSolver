@@ -65,6 +65,14 @@ class CubecraftViewModel : ViewModel() {
     val confirmedCenters: Map<Face, StickerGuess>
         get() = captures.associate { it.face to centerGuess(it) }
 
+    val scanGuideFaces: Map<Face, List<StickerGuess>>
+        get() = captures.associate { capture ->
+            capture.face to List(cubeSize * cubeSize) { index ->
+                capture.manualGuesses[index]
+                    ?: capture.guesses.getOrElse(index) { StickerGuess.UNKNOWN }
+            }
+        }
+
     val expectedCenterGuess: StickerGuess?
         get() = StandardCubeScheme.expected(
             confirmedCenters,

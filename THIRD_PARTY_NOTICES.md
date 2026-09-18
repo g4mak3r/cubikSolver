@@ -1,13 +1,13 @@
 # Third-party notices
 
-## rubiks-cube-solver reduction search
+cubikSolver uses the following third-party components:
 
-The table-free 5x5 staged reduction search in `FiveByFiveMacroReduction.kt` is adapted from ideas and implementation structure in:
+- AndroidX / Jetpack Compose / CameraX - Android Open Source Project licenses.
+- OpenCV 4.13.0 - Apache License 2.0.
+- WCA TNoodle `scrambler-min2phase` 0.19.2, including Chen Shuang's min2phase solver - GPLv3.
+- Parts of the table-free 5x5 reduction strategy are adapted from `Vortezler/rubiks-cube-solver` by Praval - MIT.
 
-- Project: `Vortezler/rubiks-cube-solver`
-- Original author: Praval
-- Source: https://github.com/Vortezler/rubiks-cube-solver
-- License: MIT
+## MIT notice for rubiks-cube-solver-derived work
 
 Copyright (c) 2026 Praval
 
