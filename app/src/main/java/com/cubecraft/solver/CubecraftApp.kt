@@ -69,7 +69,6 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
                 AppScreen.FACE_CONFIRM -> vm.pendingFaceObservation?.let { observation ->
                     FaceConfirmScreen(
                         size = vm.cubeSize,
-                        pose = vm.currentPose,
                         index = vm.scanIndex,
                         observation = observation,
                         overrides = vm.pendingFaceOverrides,
