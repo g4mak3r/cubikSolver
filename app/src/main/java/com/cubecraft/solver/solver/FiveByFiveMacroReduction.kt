@@ -30,6 +30,7 @@ internal object FiveByFiveMacroReduction {
     private const val N = 5
     private const val FACELETS = 150
     private const val CENTRE_TARGET = 54
+    private const val CENTRE_SEARCH_TARGET = 78
     private const val EDGE_TARGET = 24
     private const val EDGE_SEARCH_TARGET = 396
 
@@ -163,8 +164,8 @@ internal object FiveByFiveMacroReduction {
                     val centreResult = runStage(
                         label = "centres",
                         start = current,
-                        target = CENTRE_TARGET,
-                        score = model::centreScore,
+                        target = CENTRE_SEARCH_TARGET,
+                        score = model::centreSearchScore,
                         legal = { true },
                         operators = pool.narrowCentre,
                         finishers = pool.centreFine,
@@ -1157,6 +1158,20 @@ internal object FiveByFiveMacroReduction {
             for (face in 0 until 6) {
                 val target = state[middleIndex[face]]
                 for (index in centreIndicesByFace[face]) if (state[index] == target) score++
+            }
+            return score
+        }
+
+        fun centreSearchScore(state: ByteArray): Int {
+            var score = centreScore(state)
+            val xOffsets = intArrayOf(6, 8, 16, 18)
+            val tOffsets = intArrayOf(7, 11, 13, 17)
+
+            for (face in 0 until 6) {
+                val base = face * 25
+                val target = state[base + 12]
+                if (xOffsets.all { offset -> state[base + offset] == target }) score += 2
+                if (tOffsets.all { offset -> state[base + offset] == target }) score += 2
             }
             return score
         }
