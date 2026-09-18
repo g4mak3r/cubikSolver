@@ -126,7 +126,7 @@ fun Cube3D(
             center = center
         )
 
-        fun shellNormal(face: Face): V3 = when(face) {
+        fun coreNormal(face: Face): V3 = when(face) {
             Face.F -> V3(0f,0f,1f)
             Face.B -> V3(0f,0f,-1f)
             Face.U -> V3(0f,1f,0f)
@@ -135,7 +135,7 @@ fun Cube3D(
             Face.L -> V3(-1f,0f,0f)
         }
 
-        fun shellQuad(face: Face, h: Float): List<V3> = when(face) {
+        fun coreQuad(face: Face, h: Float): List<V3> = when(face) {
             Face.F -> listOf(V3(-h,-h,h),V3(h,-h,h),V3(h,h,h),V3(-h,h,h))
             Face.B -> listOf(V3(h,-h,-h),V3(-h,-h,-h),V3(-h,h,-h),V3(h,h,-h))
             Face.U -> listOf(V3(-h,h,h),V3(h,h,h),V3(h,h,-h),V3(-h,h,-h))
@@ -148,16 +148,17 @@ fun Cube3D(
         val hits=mutableListOf<StickerHit>()
 
         Face.entries.forEach { face ->
-            if (camera(shellNormal(face)).z > 0f) {
-                val q3 = shellQuad(face, .455f)
+            if (camera(coreNormal(face)).z > 0f) {
+                val q3 = coreQuad(face, .31f)
                 val q = q3.map { project(camera(it)) }
                 val depth = q3.map { camera(it).z }.average().toFloat()
-                val shade = when(face) {
-                    Face.U -> MetalLight
-                    Face.F, Face.R -> Metal
-                    else -> MetalDark
-                }
-                polys += Poly(q, depth - .02f, shade, MetalLight.copy(alpha = .7f), 1.2f)
+                polys += Poly(
+                    q,
+                    depth,
+                    MetalDark,
+                    Metal.copy(alpha = .55f),
+                    .8f
+                )
             }
         }
         for(st in stickers){
