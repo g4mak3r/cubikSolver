@@ -17,15 +17,15 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
-    // min2phase builds pruning tables once. Doing that in the background at app start hides most
-    // first-solve latency behind the time the user spends scanning and reviewing the cube.
+
+
     LaunchedEffect(Unit) {
         withContext(Dispatchers.Default) {
             runCatching { Min2PhaseSolver.warmUp() }
         }
     }
 
-    val colors = lightColorScheme(
+    val colors = darkColorScheme(
         background = AppBg,
         onBackground = Ink,
         surface = Panel,
