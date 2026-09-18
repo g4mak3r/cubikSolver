@@ -23,8 +23,8 @@ android {
         applicationId = "com.cubecraft.solver"
         minSdk = 29
         targetSdk = 35
-        versionCode = 31
-        versionName = "0.10.2"
+        versionCode = 32
+        versionName = "0.10.3"
         vectorDrawables { useSupportLibrary = true }
         ndk {
             abiFilters += listOf("arm64-v8a")
