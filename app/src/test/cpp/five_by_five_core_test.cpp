@@ -14,6 +14,7 @@ int main() {
     }
 
     assert(centerScore(solved.data()) == 54);
+    assert(score(solved.data(), ScoreMode::Centers) == 78);
     assert(centersSolved(solved.data()));
     assert(edgeQualityScore(solved.data()) == 24);
     assert(edgeSearchScore(solved.data()) == 396);
@@ -23,6 +24,7 @@ int main() {
     const int b = 31;
     std::swap(scrambled[a], scrambled[b]);
     assert(centerScore(scrambled.data()) == 52);
+    assert(score(scrambled.data(), ScoreMode::Centers) == 72);
 
     Pool pool;
     pool.count = 1;
@@ -37,21 +39,48 @@ int main() {
         scrambled.data(),
         nullptr,
         ScoreMode::Centers,
-        52,
+        72,
         false
     );
     assert(index == 0);
+
+    const auto beam = beamSearch(
+        pool,
+        scrambled.data(),
+        ScoreMode::Centers,
+        78,
+        72,
+        false,
+        2,
+        8,
+        100
+    );
+    assert(beam.size() == 1);
+    assert(beam[0] == 0);
+
+    const auto bestFirst = bestFirstSearch(
+        pool,
+        scrambled.data(),
+        ScoreMode::Centers,
+        78,
+        72,
+        false,
+        32,
+        100
+    );
+    assert(bestFirst.size() == 1);
+    assert(bestFirst[0] == 0);
 
     const auto best = findBest(
         pool,
         scrambled.data(),
         nullptr,
         ScoreMode::Centers,
-        52,
+        72,
         false
     );
     assert(best.index == 0);
-    assert(best.score == 54);
+    assert(best.score == 78);
 
     std::cout << "cubik555 native core ok\n";
     return 0;
