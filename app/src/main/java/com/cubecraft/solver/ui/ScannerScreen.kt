@@ -84,13 +84,13 @@ fun ScannerScreen(
     LaunchedEffect(Unit) {
         if (!granted) launcher.launch(Manifest.permission.CAMERA)
     }
-    LaunchedEffect(index) {
-        if (index == 0) {
+    LaunchedEffect(index, granted) {
+        if (index == 0 && granted) {
             introSettled = false
             delay(650L)
             introSettled = true
         } else {
-            introSettled = true
+            introSettled = index != 0
         }
     }
     LaunchedEffect(index) {
