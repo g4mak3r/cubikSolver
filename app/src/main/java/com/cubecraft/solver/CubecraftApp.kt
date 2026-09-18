@@ -33,12 +33,12 @@ fun CubecraftApp(vm: CubecraftViewModel = viewModel()) {
         surfaceVariant = Panel2,
         onSurfaceVariant = InkSoft,
         primary = Accent,
-        onPrimary = androidx.compose.ui.graphics.Color.White,
+        onPrimary = AppBg,
         secondary = InkSoft,
-        onSecondary = androidx.compose.ui.graphics.Color.White,
+        onSecondary = AppBg,
         outline = Outline,
         error = Danger,
-        onError = androidx.compose.ui.graphics.Color.White
+        onError = AppBg
     )
 
     val typography = Typography(
