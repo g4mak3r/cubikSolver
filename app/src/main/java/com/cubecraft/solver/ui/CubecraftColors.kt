@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.scanner.RgbColor
 import com.cubecraft.solver.scanner.StickerGuess
+import com.cubecraft.solver.scanner.idealDisplayRgb
 
 /*
  * cubikSolver visual system
@@ -33,12 +34,12 @@ val CameraChrome = Color(0xEA101410)
  * Camera RGB is calibration data. Once a sticker has been classified, the digital cube uses a
  * clean canonical palette so red/orange (and every other pair) remain easy to distinguish.
  */
-private val idealWhite = RgbColor(246, 243, 232)
-private val idealYellow = RgbColor(255, 211, 0)
-private val idealRed = RgbColor(199, 31, 48)
-private val idealOrange = RgbColor(255, 133, 0) // unmistakable orange, never "almost red"
-private val idealGreen = RgbColor(0, 158, 83)
-private val idealBlue = RgbColor(0, 82, 184)
+private val idealWhite = idealDisplayRgb(StickerGuess.WHITE)
+private val idealYellow = idealDisplayRgb(StickerGuess.YELLOW)
+private val idealRed = idealDisplayRgb(StickerGuess.RED)
+private val idealOrange = idealDisplayRgb(StickerGuess.ORANGE)
+private val idealGreen = idealDisplayRgb(StickerGuess.GREEN)
+private val idealBlue = idealDisplayRgb(StickerGuess.BLUE)
 
 val defaultPalette = mapOf(
     Face.U to idealWhite,
@@ -49,35 +50,9 @@ val defaultPalette = mapOf(
     Face.B to idealBlue
 )
 
-fun idealRgbForGuess(guess: StickerGuess): RgbColor = when (guess) {
-    StickerGuess.WHITE -> idealWhite
-    StickerGuess.YELLOW -> idealYellow
-    StickerGuess.RED -> idealRed
-    StickerGuess.ORANGE -> idealOrange
-    StickerGuess.GREEN -> idealGreen
-    StickerGuess.BLUE -> idealBlue
-    StickerGuess.UNKNOWN -> RgbColor(92, 94, 86)
-}
-
-/**
- * Convert a photographed centre reference to one of six clean display colors.
- * This is display-only. The actual classifier continues to use the original calibrated RGB/Lab.
- */
-private fun idealizeObserved(rgb: RgbColor): RgbColor {
-    val f = rgb.features()
-    return when {
-        f.saturation < .28 && f.value > .42 -> idealWhite
-        f.hue in 38.0..78.0 -> idealYellow
-        f.hue in 72.0..175.0 -> idealGreen
-        f.hue in 175.0..285.0 -> idealBlue
-        f.hue in 12.0..38.0 -> idealOrange
-        (f.hue < 12.0 || f.hue > 330.0) && f.redOrangeAxis > .032 -> idealOrange
-        else -> idealRed
-    }
-}
+fun idealRgbForGuess(guess: StickerGuess): RgbColor = idealDisplayRgb(guess)
 
 fun faceColor(face: Face, palette: Map<Face, RgbColor>): Color {
-    val observed = palette[face]
-    val rgb = if (observed == null) defaultPalette.getValue(face) else idealizeObserved(observed)
+    val rgb = palette[face] ?: defaultPalette.getValue(face)
     return Color(rgb.argb())
 }
