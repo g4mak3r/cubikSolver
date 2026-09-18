@@ -10,20 +10,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-/**
- * Continuous hybrid scanner.
- *
- * There is deliberately NO capture lock:
- * - contour tracking improves geometry when it is available;
- * - a center guide square is always sampled when tracking is unavailable;
- * - ScannerScreen can therefore capture the next live frame at any time.
- *
- * The contour tracker is only an AR assist. The fixed center guide is the source of truth
- * for color sampling and capture, so a bad contour can never change the sampled scale.
- *
- * Scale guard: tiny quadrilaterals (typically one sticker/cubie) are rejected before tracking.
- * The tracker only accepts a macro-sized face near the fixed guide.
- */
+
 class FaceAnalyzer(
     private val gridSize: Int,
     private val onResult: (FaceObservation?) -> Unit
@@ -48,8 +35,8 @@ class FaceAnalyzer(
                     val smooth = smoothCorners(found.first)
                     trackedCorners = smooth
                     lastTrackSeenMs = now
-                    // IMPORTANT: colors are always sampled from the fixed guide.
-                    // The tracked quad is visual AR assistance only.
+
+
                     sampleGuideSquare(
                         rgba = rotated,
                         n = gridSize,
@@ -61,8 +48,8 @@ class FaceAnalyzer(
                     )
                 }
                 trackedCorners != null && now - lastTrackSeenMs <= TRACK_GRACE_MS -> {
-                    // Keep the AR outline stable through brief glare/motion blur, but never let it
-                    // alter the fixed-grid samples used by Capture.
+
+
                     val decay = (1f - (now - lastTrackSeenMs).toFloat() / TRACK_GRACE_MS).coerceIn(0f, 1f)
                     sampleGuideSquare(
                         rgba = rotated,
@@ -82,7 +69,7 @@ class FaceAnalyzer(
             rotated.release()
             onResult(observation)
         } catch (_: Throwable) {
-            // A bad frame must never kill the analysis stream.
+
             onResult(null)
         } finally {
             image.close()
@@ -109,8 +96,8 @@ class FaceAnalyzer(
 
         for (contour in contours) {
             val area = Imgproc.contourArea(contour)
-            // Reject sticker/cubie-sized quads. A real face aligned to our guide must be
-            // macro-sized; if no such contour exists we intentionally fall back to fixed-grid mode.
+
+
             val areaVsGuide = area / max(1.0, guideArea)
             if (areaVsGuide < MIN_FACE_AREA_VS_GUIDE || areaVsGuide > MAX_FACE_AREA_VS_GUIDE) {
                 contour.release(); continue
@@ -133,14 +120,14 @@ class FaceAnalyzer(
                     val minQuadSide = sides.minOrNull() ?: 0.0
                     val maxQuadSide = sides.maxOrNull() ?: 1.0
                     val squareness = minQuadSide / max(1.0, maxQuadSide)
-                    // Extra scale guard. Even under perspective, one side of the whole face
-                    // should occupy a substantial fraction of the fixed guide.
+
+
                     if (maxQuadSide < guideSide * MIN_FACE_SIDE_VS_GUIDE || minQuadSide < guideSide * MIN_SHORT_SIDE_VS_GUIDE) {
                         c2.release(); approx.release(); contour.release(); continue
                     }
                     val cx = ordered.map { it.x }.average(); val cy = ordered.map { it.y }.average()
                     val centerDistance = sqrt((cx-frameCx)*(cx-frameCx)+(cy-frameCy)*(cy-frameCy))
-                    // AR is assistance for the centered capture guide, not a general object detector.
+
                     if (centerDistance > minSide * MAX_CENTER_OFFSET_VS_MIN_SIDE) {
                         c2.release(); approx.release(); contour.release(); continue
                     }
@@ -161,7 +148,7 @@ class FaceAnalyzer(
 
     private fun smoothCorners(next: Array<Point>): Array<Point> {
         val prev = trackedCorners ?: return next.map { Point(it.x, it.y) }.toTypedArray()
-        // More weight on the previous position = less jitter, but still follows deliberate motion.
+
         val keep = .68
         return Array(4) { i ->
             Point(
@@ -171,7 +158,7 @@ class FaceAnalyzer(
         }
     }
 
-    /** Always-available manual path matching the center guide drawn by ScannerScreen. */
+    
     private fun sampleGuideSquare(
         rgba: Mat,
         n: Int,
@@ -266,38 +253,9 @@ class FaceAnalyzer(
         return SampleBatch(samples, confidences, live)
     }
 
-    /**
-     * Live hint only. The final scan still uses the six captured centers + balanced assignment.
-     * Thresholds are intentionally biased against the common phone-camera failure where warm white
-     * is shown as yellow. Bright flame-orange and bright red are separated mainly by hue.
-     */
-    private fun provisionalGuess(rgb: RgbColor): Pair<StickerGuess, Double> {
-        val f = rgb.features()
-
-        // Warm white can easily sit around S=.20-.30 on phone auto-WB. Yellow cube plastic is
-        // normally much more chromatic, so keep a generous neutral-white corridor.
-        if (f.value > .50 && f.saturation < .32) {
-            val neutral = (1.0 - f.saturation / .36).coerceIn(.25, 1.0)
-            val bright = ((f.value - .42) / .42).coerceIn(.25, 1.0)
-            return StickerGuess.WHITE to (.72 * neutral + .28 * bright).coerceIn(.25, 1.0)
-        }
-
-        val hue = f.hue
-        val (guess, center, halfWidth) = when {
-            // Bright modern cube reds are often slightly orange-shifted; keep red narrow enough
-            // that a flame orange around 18-35 degrees still lands in ORANGE.
-            hue < 11 || hue >= 348 -> Triple(StickerGuess.RED, if (hue < 11) 0.0 else 360.0, 18.0)
-            hue < 43 -> Triple(StickerGuess.ORANGE, 27.0, 21.0)
-            hue < 82 -> Triple(StickerGuess.YELLOW, 60.0, 25.0)
-            hue < 174 -> Triple(StickerGuess.GREEN, 126.0, 55.0)
-            hue < 272 -> Triple(StickerGuess.BLUE, 220.0, 55.0)
-            else -> Triple(StickerGuess.RED, 330.0, 42.0)
-        }
-        val hueDistance = circularHueDistance(hue, center)
-        val hueConfidence = (1.0 - hueDistance / max(halfWidth, 1.0)).coerceIn(.15, 1.0)
-        val satConfidence = ((f.saturation - .18) / .52).coerceIn(.15, 1.0)
-        return guess to (.68 * hueConfidence + .32 * satConfidence).coerceIn(.15, 1.0)
-    }
+    
+    private fun provisionalGuess(rgb: RgbColor): Pair<StickerGuess, Double> =
+        canonicalGuess(rgb)
 
     private fun yuv420ToRgba(image: ImageProxy): Mat {
         val w = image.width; val h = image.height
@@ -353,8 +311,7 @@ class FaceAnalyzer(
         private const val TRACK_GRACE_MS = 420L
         private const val GUIDE_FRACTION = .78
 
-        // AR may follow only a macro-sized face near the fixed guide. These guards
-        // deliberately prefer "no AR lock" over ever locking to one sticker/cubie.
+
         private const val MIN_FACE_AREA_VS_GUIDE = .26
         private const val MAX_FACE_AREA_VS_GUIDE = 1.45
         private const val TARGET_FACE_AREA_VS_GUIDE = .82
