@@ -17,9 +17,4 @@ target_compile_options(
     -fvisibility=hidden
     -fvisibility-inlines-hidden
 )
-
-set_target_properties(
-    cubik555
-    PROPERTIES
-    INTERPROCEDURAL_OPTIMIZATION TRUE
-)
+target_link_options(cubik555 PRIVATE -fuse-ld=lld)
