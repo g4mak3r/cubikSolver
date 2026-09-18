@@ -54,8 +54,8 @@ object BalancedClassifier {
         }
 
         val assignment = hungarian(costs)
-        val perFace = Face.entries.associateWith {
-            MutableList(size * size) { it }
+        val perFace = Face.entries.associateWith { face ->
+            MutableList(size * size) { face }
         }
 
         var sum = 0.0
