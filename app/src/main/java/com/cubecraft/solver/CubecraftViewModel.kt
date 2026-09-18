@@ -104,6 +104,11 @@ class CubecraftViewModel : ViewModel() {
 
     fun beginScan(size: Int) {
         cubeSize = size
+        if (size == 5) {
+            viewModelScope.launch(Dispatchers.Default) {
+                FiveByFiveMacroReduction.prewarm()
+            }
+        }
         captures.clear()
         colorFaces = defaultColorFaces()
         scanIndex = 0
