@@ -77,7 +77,7 @@ class FiveByFiveCenterSearch(
 
     fun solve(start: CubeState): Result {
         require(start.size == 5) { "5x5 center search expects CubeState(5)" }
-        if (FiveByFiveTopology.centersSolved(start)) return Result.Success(emptyList(), 0)
+        if (liveCentersSolved(start)) return Result.Success(emptyList(), 0)
 
         val queue = PriorityQueue<Node>(
             compareBy<Node> { it.priority }
@@ -85,7 +85,7 @@ class FiveByFiveCenterSearch(
                 .thenBy { it.actions }
         )
         val first = start.deepCopy()
-        val firstSolved = FiveByFiveTopology.solvedMovableCenterCount(first)
+        val firstSolved = liveSolvedCenterCount(first)
         queue += Node(first, emptyList(), 0, firstSolved, null)
 
         val bestDepthByState = HashMap<String, Int>()
@@ -101,7 +101,7 @@ class FiveByFiveCenterSearch(
             if (node.solvedCenters > bestSolved) bestSolved = node.solvedCenters
             if (node.solvedCenters == 48) {
                 val verified = start.deepCopy().also { it.applyAll(node.path) }
-                check(FiveByFiveTopology.centersSolved(verified)) {
+                check(liveCentersSolved(verified)) {
                     "Center search returned a sequence that failed replay verification"
                 }
                 return Result.Success(node.path, expanded)
@@ -118,7 +118,7 @@ class FiveByFiveCenterSearch(
                 if (previousDepth != null && previousDepth <= nextActionDepth) continue
                 bestDepthByState[key] = nextActionDepth
 
-                val solved = FiveByFiveTopology.solvedMovableCenterCount(nextCube)
+                val solved = liveSolvedCenterCount(nextCube)
                 val nextPath = ArrayList<Move>(node.path.size + action.emitted.size).apply {
                     addAll(node.path)
                     addAll(action.emitted)
@@ -129,6 +129,27 @@ class FiveByFiveCenterSearch(
 
         return Result.BudgetExceeded(bestSolved, expanded)
     }
+
+
+    /**
+     * Macro reduction may rotate the centre frame with middle-slice notation. A finishing search
+     * must therefore target the color of the live fixed middle on each face, not hard-code
+     * U/R/F/D/L/B identities. This is equivalent to the macro reducer's centreScore.
+     */
+    private fun liveSolvedCenterCount(cube: CubeState): Int {
+        var solved = 0
+        for (face in Face.entries) {
+            val values = cube.faceColors(face)
+            val target = values[12]
+            for (r in 1..3) for (c in 1..3) {
+                if (r == 2 && c == 2) continue
+                if (values[r * 5 + c] == target) solved++
+            }
+        }
+        return solved
+    }
+
+    private fun liveCentersSolved(cube: CubeState): Boolean = liveSolvedCenterCount(cube) == 48
 
     private fun canMergeWithPrevious(previous: Action?, next: Action): Boolean {
         if (previous == null) return false
