@@ -497,15 +497,32 @@ internal object FiveByFiveMacroReduction {
                         if (finishers.isNotEmpty()) finishers else operators
                     )
                     val native = pool.nativeFor(preferred)
+                    val floor = base - if (deep) 4 else 5
+
+                    val broadBudget = (nativeBudget * 0.58f).toInt().coerceAtLeast(120)
+                    val broad = native?.bestFirstSearch(
+                        state = start,
+                        mode = mode,
+                        target = target,
+                        floor = floor,
+                        requireCenters = deep,
+                        maxNodes = if (deep) 42_000 else 34_000,
+                        budgetMillis = broadBudget
+                    )
+                    if (!broad.isNullOrEmpty()) {
+                        return simplify(broad.flatMap { preferred[it].moves })
+                    }
+
+                    val beamBudget = (nativeBudget - broadBudget).coerceAtLeast(100)
                     val indices = native?.beamSearch(
                         state = start,
                         mode = mode,
                         target = target,
-                        floor = base - if (deep) 3 else 4,
+                        floor = floor,
                         requireCenters = deep,
                         maxDepth = if (deep) 5 else 6,
                         beamWidth = if (deep) 224 else 288,
-                        budgetMillis = nativeBudget
+                        budgetMillis = beamBudget
                     )
                     if (!indices.isNullOrEmpty()) {
                         return simplify(indices.flatMap { preferred[it].moves })

@@ -74,6 +74,28 @@ internal object NativeFiveByFiveKernel {
             )
         }
 
+        fun bestFirstSearch(
+            state: ByteArray,
+            mode: Int,
+            target: Int,
+            floor: Int,
+            requireCenters: Boolean,
+            maxNodes: Int,
+            budgetMillis: Int
+        ): IntArray? {
+            if (handle == 0L) return null
+            return bestFirstSearchNative(
+                handle,
+                state,
+                mode,
+                target,
+                floor,
+                requireCenters,
+                maxNodes,
+                budgetMillis
+            )
+        }
+
         fun beamSearch(
             state: ByteArray,
             mode: Int,
@@ -232,6 +254,17 @@ internal object NativeFiveByFiveKernel {
         requireCenters: Boolean,
         maxDepth: Int,
         beamWidth: Int,
+        budgetMillis: Int
+    ): IntArray?
+
+    private external fun bestFirstSearchNative(
+        poolHandle: Long,
+        state: ByteArray,
+        mode: Int,
+        target: Int,
+        floor: Int,
+        requireCenters: Boolean,
+        maxNodes: Int,
         budgetMillis: Int
     ): IntArray?
 }
