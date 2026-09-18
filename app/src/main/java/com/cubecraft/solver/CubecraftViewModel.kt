@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.cubecraft.solver.model.*
 import com.cubecraft.solver.scanner.*
 import com.cubecraft.solver.solver.*
+import com.cubecraft.solver.ui.defaultPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
