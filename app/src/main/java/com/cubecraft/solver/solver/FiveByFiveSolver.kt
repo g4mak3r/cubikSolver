@@ -162,28 +162,22 @@ class FiveByFiveSolver(
                 )
             }
 
+            // The old CubeState-based A* tail is deliberately disabled on Android/native.
+            // Each node owns a 150-entry HashMap and can exhaust memory long before a time
+            // deadline. Native reduction already has compact beam + best-first rescue; if a
+            // basin stalls, move to the next legal prefix instead of opening the legacy search.
             val tailTime = deadline - System.currentTimeMillis()
-            val edgeReserve = if (NativeFiveByFiveKernel.available) 3_800L else 0L
-            val tailBudget = if (NativeFiveByFiveKernel.available) {
-                minOf(1_250L, (tailTime - edgeReserve).coerceAtLeast(0L))
-            } else {
-                Long.MAX_VALUE
-            }
+            val useLegacyTail = !NativeFiveByFiveKernel.available
             if (
-                tailBudget > 250L &&
+                useLegacyTail &&
+                tailTime > 1_200L &&
                 !reduction.centresSolved &&
                 reduction.centreScore >= 48 &&
                 reduction.moves.isNotEmpty()
             ) {
-                val tailDeadline = if (tailBudget == Long.MAX_VALUE) {
-                    Long.MAX_VALUE
-                } else {
-                    System.currentTimeMillis() + tailBudget
-                }
                 when (
                     val tail = FiveByFiveCenterSearch(
-                        maxExpanded = if (NativeFiveByFiveKernel.available) 14_000 else 180_000,
-                        deadlineMs = tailDeadline
+                        maxExpanded = 180_000
                     ).solve(candidate)
                 ) {
                     is FiveByFiveCenterSearch.Result.Success -> {
