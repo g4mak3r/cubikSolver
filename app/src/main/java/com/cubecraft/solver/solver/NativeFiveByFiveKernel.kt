@@ -74,6 +74,30 @@ internal object NativeFiveByFiveKernel {
             )
         }
 
+        fun beamSearch(
+            state: ByteArray,
+            mode: Int,
+            target: Int,
+            floor: Int,
+            requireCenters: Boolean,
+            maxDepth: Int,
+            beamWidth: Int,
+            budgetMillis: Int
+        ): IntArray? {
+            if (handle == 0L) return null
+            return beamSearchNative(
+                handle,
+                state,
+                mode,
+                target,
+                floor,
+                requireCenters,
+                maxDepth,
+                beamWidth,
+                budgetMillis
+            )
+        }
+
         fun findBestWrapped(
             wrappers: WrapperPool,
             state: ByteArray,
@@ -198,4 +222,16 @@ internal object NativeFiveByFiveKernel {
         floor: Int,
         requireCenters: Boolean
     ): Long
+
+    private external fun beamSearchNative(
+        poolHandle: Long,
+        state: ByteArray,
+        mode: Int,
+        target: Int,
+        floor: Int,
+        requireCenters: Boolean,
+        maxDepth: Int,
+        beamWidth: Int,
+        budgetMillis: Int
+    ): IntArray?
 }

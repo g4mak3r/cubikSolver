@@ -95,4 +95,16 @@ WrappedEvalResult findBestWrapped(
     bool requireCenters
 );
 
+std::vector<int> beamSearch(
+    const Pool& pool,
+    const std::uint8_t* state,
+    ScoreMode mode,
+    int target,
+    int floor,
+    bool requireCenters,
+    int maxDepth,
+    int beamWidth,
+    int budgetMillis
+);
+
 }
