@@ -28,6 +28,10 @@ class FiveByFiveSolverTest {
         assertStickerStateSolve("Rw U Fw2 D' Lw B2 Uw R2 F' Dw L2 Bw' U2 Rw'")
     }
 
+    @Test fun solvesLongRandomLikeStateOnly() {
+        assertStickerStateSolve("Rw U Fw2 D' Lw B2 Uw R2 F' Dw L2 Bw' U2 Rw' F2 Uw2 L' Dw Rw2 B U' Fw D2 Lw' R")
+    }
+
     private fun assertStickerStateSolve(scramble: String) {
         val scannedState = CubeState(5)
         scannedState.applyAll(Move.parseAlgorithm(scramble))
