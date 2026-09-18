@@ -31,14 +31,14 @@ class CubecraftViewModel : ViewModel() {
     var message by mutableStateOf<String?>(null); private set
     var solving by mutableStateOf(false); private set
     var solution by mutableStateOf<List<Move>>(emptyList()); private set
-    /** Number of solution moves currently replayed in the digital preview. */
+    
     var solutionIndex by mutableIntStateOf(0); private set
 
     private val captures = mutableListOf<CapturedFace>()
     private val history = mutableListOf<Move>()
     private val redo = mutableListOf<Move>()
     private var baseline: Map<Face,List<Face>>? = null
-    /** Exact cube state from which the currently displayed solution was calculated. */
+    
     private var solutionStart: Map<Face,List<Face>>? = null
     private var originSolved = true
     private var solveRequestId = 0L
@@ -56,12 +56,27 @@ class CubecraftViewModel : ViewModel() {
         StickerGuess.BLUE to Face.B
     )
 
+    private fun centerGuess(capture: CapturedFace): StickerGuess {
+        val center = cubeSize * cubeSize / 2
+        return capture.manualGuesses[center]
+            ?: capture.guesses.getOrElse(center) { StickerGuess.UNKNOWN }
+    }
+
+    val confirmedCenters: Map<Face, StickerGuess>
+        get() = captures.associate { it.face to centerGuess(it) }
+
+    val expectedCenterGuess: StickerGuess?
+        get() = StandardCubeScheme.expected(
+            confirmedCenters,
+            scanSequence[scanIndex.coerceIn(0, 5)].face
+        )
+
     val currentPose: ScanPose get() {
         val base = scanSequence[scanIndex.coerceIn(0,5)]
         val label = frontCenterGuess?.displayName?.takeIf { it != "COLOR" } ?: "SAVED"
         return base.copy(instruction = base.instruction.replace("{FRONT_CENTER}", label))
     }
-    /** The next physical turn the user should perform at the current slider position. */
+    
     val currentGuideMove: Move? get() = solution.getOrNull(solutionIndex)
     val moveHistory: List<Move> get() = history.toList()
     val hasBaseline: Boolean get() = baseline != null
@@ -110,10 +125,7 @@ class CubecraftViewModel : ViewModel() {
 
     fun updateScanQuality(q: Float) { scanQuality = q }
 
-    /**
-     * Capture never advances directly anymore. Every face first stops on a confirmation screen
-     * showing exactly what the camera sampled. Only confirmCurrentFace() commits the face and moves on.
-     */
+    
     fun captureFace(observation: FaceObservation) {
         if (observation.samples.size != cubeSize * cubeSize) return
         if (screen != AppScreen.SCAN) return
@@ -167,8 +179,8 @@ class CubecraftViewModel : ViewModel() {
             scanIndex++
             screen = AppScreen.SCAN
         } else {
-            // Keep the sixth observation alive until finalization succeeds. If anything goes wrong,
-            // the user remains on its confirmation screen and can edit/rescan instead of crashing.
+
+
             if (finishClassification()) {
                 pendingFaceObservation = null
                 pendingFaceOverrides = emptyMap()
@@ -176,7 +188,7 @@ class CubecraftViewModel : ViewModel() {
         }
     }
 
-    /** Throw away only the just-captured frame and return to the same face. */
+    
     fun rescanCurrentFace() {
         pendingFaceObservation = null
         pendingFaceOverrides = emptyMap()
@@ -187,10 +199,7 @@ class CubecraftViewModel : ViewModel() {
 
     fun restartScan() { beginScan(cubeSize) }
 
-    /**
-     * Face six is a hard transition point. Every operation here is guarded: malformed classifier
-     * output or cube construction must stay recoverable in the UI instead of terminating Android.
-     */
+    
     private fun finishClassification(): Boolean {
         var usedFallback = false
 
@@ -254,7 +263,7 @@ class CubecraftViewModel : ViewModel() {
         refreshReviewValidation()
     }
 
-    /** Set one reviewed sticker explicitly instead of forcing the user to cycle through colors. */
+    
     fun setReviewStickerColor(face: Face, index: Int, color: Face) {
         val n = cubeSize
         val center = n * n / 2
@@ -271,7 +280,7 @@ class CubecraftViewModel : ViewModel() {
         refreshReviewValidation()
     }
 
-    /** Legacy convenience for older UI paths. */
+    
     fun cycleReviewSticker(face: Face, index: Int) {
         val n = cubeSize
         if (index == n*n/2) return
@@ -468,21 +477,16 @@ class CubecraftViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Timeline semantics: index == number of already replayed moves.
-     * 0 = the exact scanned state and instruction #1 is highlighted.
-     * N = solved preview after all N solution moves.
-     */
+    
     fun solutionSeek(appliedMoves: Int) {
         val start = solutionStart ?: return
         if (solution.isEmpty()) return
         val target = appliedMoves.coerceIn(0, solution.size)
         if (target == solutionIndex) return
 
-        // NEXT/PREV and a slowly dragged slider are now O(1): on a 5x5 solution with several
-        // hundred reduction moves there is no reason to rebuild all 150 stickers from START for
-        // every adjacent step. Large slider jumps still reconstruct deterministically from the
-        // exact scanned snapshot so there is no accumulated preview drift.
+
+
+
         when {
             target == solutionIndex + 1 -> cube.apply(solution[solutionIndex])
             target == solutionIndex - 1 -> cube.apply(solution[target].inverse())
