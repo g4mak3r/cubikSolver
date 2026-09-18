@@ -69,6 +69,17 @@ data class ColorFeatures(
 
 data class ColorSample(val lab: LabColor, val rgb: RgbColor)
 
+/** Canonical display colors. Camera RGB is evidence for classification, never UI paint. */
+fun idealDisplayRgb(guess: StickerGuess): RgbColor = when (guess) {
+    StickerGuess.WHITE -> RgbColor(248, 247, 240)
+    StickerGuess.YELLOW -> RgbColor(255, 214, 0)
+    StickerGuess.RED -> RgbColor(205, 36, 48)
+    StickerGuess.ORANGE -> RgbColor(255, 132, 0)
+    StickerGuess.GREEN -> RgbColor(0, 158, 84)
+    StickerGuess.BLUE -> RgbColor(0, 86, 190)
+    StickerGuess.UNKNOWN -> RgbColor(96, 98, 91)
+}
+
 fun circularHueDistance(a: Double, b: Double): Double {
     val d = abs(a - b) % 360.0
     return min(d, 360.0 - d)
