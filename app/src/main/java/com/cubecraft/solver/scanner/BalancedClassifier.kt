@@ -128,9 +128,9 @@ object BalancedClassifier {
                 when {
                     manual != null && color != manual -> 1_000_000.0
                     else -> {
-                        var cost = cubeColorDistance(sample, canonicalColorSample(color))
+                        var cost = recognitionCost(sample.rgb, color)
                         if (manual == null && live != StickerGuess.UNKNOWN && live != color) {
-                            cost += 5.0
+                            cost += 3.0
                         }
                         cost
                     }
@@ -158,11 +158,11 @@ object BalancedClassifier {
         calibration: Calibration
     ): Double {
         val adaptive = cubeColorDistance(sample, calibration.refs.getValue(target))
-        val canonical = cubeColorDistance(
-            sample,
-            canonicalColorSample(calibration.colorByFace.getValue(target))
+        val prior = recognitionCost(
+            sample.rgb,
+            calibration.colorByFace.getValue(target)
         )
-        return adaptive * .82 + canonical * .18
+        return adaptive * .86 + prior * .14
     }
 
     private fun validatedCaptures(
