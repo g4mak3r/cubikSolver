@@ -6,34 +6,26 @@ import com.cubecraft.solver.scanner.RgbColor
 import com.cubecraft.solver.scanner.StickerGuess
 import com.cubecraft.solver.scanner.idealDisplayRgb
 
-/*
- * cubikSolver visual system
- * -------------------------
- * Not "AI dashboard" chrome. Think late-80s/early-90s laboratory terminal: warm plastic,
- * black ink, one phosphor-green signal color, square geometry and restrained typography.
- */
-val AppBg = Color(0xFFF0EDE2)
-val Panel = Color(0xFFF8F5EA)
-val Panel2 = Color(0xFFE4E0D3)
-val Viewport = Color(0xFF171B18)
-val Ink = Color(0xFF151713)
-val InkSoft = Color(0xFF343831)
-val Muted = Color(0xFF74766C)
-val Outline = Color(0xFFB8B4A7)
-val Accent = Color(0xFF1F6B43)
-val AccentSoft = Color(0xFFDCE8DD)
-val Success = Color(0xFF13733E)
-val SuccessSoft = Color(0xFFDDEBDD)
-val Danger = Color(0xFFAD3C2C)
-val DangerSoft = Color(0xFFF1DDD6)
-val SignalAmber = Color(0xFFD67A16)
-val CameraChrome = Color(0xEA101410)
+val AppBg = Color(0xFF080A0C)
+val Panel = Color(0xFF0D1013)
+val Panel2 = Color(0xFF14191E)
+val Viewport = Color(0xFF050607)
+val Ink = Color(0xFFE9EEF2)
+val InkSoft = Color(0xFFA9B2BA)
+val Muted = Color(0xFF626B74)
+val Outline = Color(0xFF252C33)
+val Accent = Color(0xFF69E6B4)
+val AccentSoft = Color(0xFF10241D)
+val Success = Color(0xFF69E6B4)
+val SuccessSoft = Color(0xFF10241D)
+val Danger = Color(0xFFFF665E)
+val DangerSoft = Color(0xFF2A1212)
+val SignalAmber = Color(0xFFFFA344)
+val CameraChrome = Color(0xE6080A0C)
+val Metal = Color(0xFF171C21)
+val MetalLight = Color(0xFF2C343C)
+val MetalDark = Color(0xFF090B0D)
 
-/*
- * These are intentionally *not* sampled from the user's physical cube.
- * Camera RGB is calibration data. Once a sticker has been classified, the digital cube uses a
- * clean canonical palette so red/orange (and every other pair) remain easy to distinguish.
- */
 private val idealWhite = idealDisplayRgb(StickerGuess.WHITE)
 private val idealYellow = idealDisplayRgb(StickerGuess.YELLOW)
 private val idealRed = idealDisplayRgb(StickerGuess.RED)
