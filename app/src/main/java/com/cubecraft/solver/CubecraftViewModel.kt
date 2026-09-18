@@ -419,11 +419,7 @@ class CubecraftViewModel : ViewModel() {
         solutionIndex = 0
         solutionStart = null
         solving = true
-        message = when (state.size) {
-            3 -> "Analyzing a short verified 3x3 solution…"
-            5 -> "Reducing centers and pairing edges for a verified 5x5 solution…"
-            else -> "Analyzing cube…"
-        }
+        message = null
 
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
@@ -445,14 +441,14 @@ class CubecraftViewModel : ViewModel() {
                     solutionIndex = 0
                     history.clear()
                     redo.clear()
-                    message = if (result.moves.isEmpty()) {
-                        "Cube is already solved."
-                    } else {
-                        "Verified solution: ${result.moves.size} moves"
-                    }
+                    message = if (result.moves.isEmpty()) "SOLVED" else null
                 }
-                is SolverResult.Invalid -> message = result.reason
-                is SolverResult.Unavailable -> message = result.reason
+                is SolverResult.Invalid -> {
+                    message = if (state.size == 5) "5×5 STATE INVALID" else result.reason
+                }
+                is SolverResult.Unavailable -> {
+                    message = if (state.size == 5) "5×5 · RETRY ANALYZE" else result.reason
+                }
             }
         }
     }
@@ -485,10 +481,10 @@ class CubecraftViewModel : ViewModel() {
         redo.clear()
         revision++
 
-        message = if (target == solution.size) {
-            if (cubeIsUniformSolved()) "Solved preview - all ${solution.size} moves applied." else "Replay mismatch - reanalyze the scan."
+        message = if (target == solution.size && !cubeIsUniformSolved()) {
+            "REPLAY MISMATCH"
         } else {
-            "Step ${target + 1} of ${solution.size}"
+            null
         }
     }
 
