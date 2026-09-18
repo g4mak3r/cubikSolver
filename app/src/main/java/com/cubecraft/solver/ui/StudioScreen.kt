@@ -468,6 +468,7 @@ private fun isErrorMessage(message: String?): Boolean {
         "reduction",
         "error",
         "mismatch",
-        "unavailable"
+        "unavailable",
+        "retry"
     ).any { message.contains(it, ignoreCase = true) }
 }
