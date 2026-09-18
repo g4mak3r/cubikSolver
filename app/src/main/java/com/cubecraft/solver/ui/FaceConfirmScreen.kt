@@ -2,14 +2,19 @@ package com.cubecraft.solver.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +24,15 @@ import com.cubecraft.solver.scanner.RgbColor
 import com.cubecraft.solver.scanner.ScanPose
 import com.cubecraft.solver.scanner.StickerGuess
 
+/**
+ * Per-face confirmation is a tiny paint tool:
+ * 1) choose a color once;
+ * 2) tap or drag across every wrong cell;
+ * 3) accept the face.
+ *
+ * The preview intentionally uses ideal digital cube colors, never the photographed RGB values.
+ * Camera RGB remains calibration data inside the scanner/classifier.
+ */
 @Composable
 fun FaceConfirmScreen(
     size: Int,
@@ -40,145 +54,142 @@ fun FaceConfirmScreen(
             LiveSticker(it.rgb, StickerGuess.UNKNOWN, 0f)
         }
     }
-    var selectedCell by remember(index, size) { mutableIntStateOf(expected / 2) }
-    val centerGuess = overrides[expected / 2] ?: stickers.getOrNull(expected / 2)?.guess
     val uncertain = stickers.indices.count { idx ->
         idx !in overrides && (stickers.getOrNull(idx)?.confidence ?: 0f) < .56f
     }
+
+    var brush by remember(index, size) { mutableStateOf<StickerGuess?>(null) }
+    var cameraBrush by remember(index, size) { mutableStateOf(false) }
+    val paintEnabled = brush != null || cameraBrush
 
     Column(
         Modifier.fillMaxSize().background(AppBg).padding(horizontal = 18.dp)
     ) {
         Spacer(Modifier.height(10.dp))
+
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onRescan, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
-                Text("‹  CAMERA", color = InkSoft, fontWeight = FontWeight.Bold)
+            TextButton(
+                onClick = onRescan,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)
+            ) {
+                Text("← CAMERA", fontFamily = FontFamily.Monospace, color = Ink, fontSize = 11.sp)
             }
             Spacer(Modifier.weight(1f))
-            Surface(color = AccentSoft, shape = RoundedCornerShape(999.dp)) {
-                Text(
-                    "FACE ${index + 1} / 6",
-                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = Accent,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
+            Text(
+                (index + 1).toString().padStart(2, '0') + " / 06",
+                fontFamily = FontFamily.Monospace,
+                color = Muted,
+                fontSize = 11.sp
+            )
         }
 
-        Text("Check ${pose.title.lowercase()}", color = Ink, fontSize = 27.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
-            "Tap a wrong square and choose its real color. If the whole read is bad, rescan this face.",
+            pose.title.uppercase(),
+            modifier = Modifier.fillMaxWidth(),
+            color = Ink,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            "SELECT COLOR  →  TAP / DRAG WRONG CELLS",
+            modifier = Modifier.fillMaxWidth(),
             color = Muted,
-            fontSize = 12.sp,
-            lineHeight = 17.sp
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+            letterSpacing = .45.sp
         )
 
-        Spacer(Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            color = Panel,
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, Outline)
+        Spacer(Modifier.height(14.dp))
+        Box(
+            Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.Center
         ) {
-            Column(Modifier.padding(13.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("CAMERA READ", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                        Text(
-                            centerGuess?.let { "Center: ${it.label}" } ?: "Center: ?",
-                            color = Ink,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                    Text(
-                        "${(observation.quality * 100).toInt()}%",
-                        color = if (uncertain == 0) Success else Accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black
-                    )
+            PaintableScanGrid(
+                gridSize = size,
+                stickers = stickers,
+                overrides = overrides,
+                enabled = paintEnabled,
+                onPaint = { cell ->
+                    if (cameraBrush) onClearColor(cell)
+                    else brush?.let { onSetColor(cell, it) }
                 }
-
-                Spacer(Modifier.height(10.dp))
-                PreviewGrid(
-                    size = size,
-                    stickers = stickers,
-                    overrides = overrides,
-                    selected = selectedCell,
-                    onSelect = { selectedCell = it }
-                )
-
-                Spacer(Modifier.height(10.dp))
-                val selectedGuess = overrides[selectedCell]
-                    ?: stickers.getOrNull(selectedCell)?.guess
-                    ?: StickerGuess.UNKNOWN
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "CELL ${selectedCell + 1}: ${selectedGuess.label}",
-                        color = Ink,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (selectedCell in overrides) {
-                        TextButton(
-                            onClick = { onClearColor(selectedCell) },
-                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 2.dp)
-                        ) {
-                            Text("CAMERA VALUE", color = Muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                ColorPickerRow(selectedGuess) { guess -> onSetColor(selectedCell, guess) }
-
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    when {
-                        overrides.isNotEmpty() -> "${overrides.size} manual correction${if (overrides.size == 1) "" else "s"} will override camera classification."
-                        uncertain == 0 -> "All sampled cells look confident. Still compare them with the physical face."
-                        else -> "$uncertain sampled cell${if (uncertain == 1) "" else "s"} look uncertain. Check those cells closely."
-                    },
-                    color = if (overrides.isNotEmpty()) Accent else if (uncertain == 0) Muted else Danger,
-                    fontSize = 9.sp,
-                    lineHeight = 13.sp
-                )
-            }
+            )
         }
 
-        message?.let {
-            Spacer(Modifier.height(7.dp))
-            Surface(color = DangerSoft, shape = RoundedCornerShape(13.dp), border = BorderStroke(1.dp, Danger.copy(alpha=.2f))) {
-                Text(
-                    it,
-                    Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp),
-                    color = Danger,
-                    fontSize = 9.sp,
-                    lineHeight = 13.sp
-                )
-            }
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when {
+                    brush != null -> "BRUSH / " + brush!!.label
+                    cameraBrush -> "BRUSH / CAMERA"
+                    else -> "CHOOSE BRUSH"
+                },
+                color = if (paintEnabled) Accent else Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Q " + (observation.quality * 100).toInt() + "  ·  ? " + uncertain + "  ·  EDIT " + overrides.size,
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp
+            )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(7.dp))
+        BrushPalette(
+            selected = brush,
+            cameraSelected = cameraBrush,
+            onColor = {
+                brush = it
+                cameraBrush = false
+            },
+            onCamera = {
+                brush = null
+                cameraBrush = true
+            }
+        )
+
+        if (message != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Danger, RoundedCornerShape(5.dp))
+                    .padding(9.dp),
+                color = Danger,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp,
+                lineHeight = 13.sp
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = onRescan,
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.weight(1f).height(50.dp),
+                shape = RoundedCornerShape(5.dp),
+                border = BorderStroke(1.dp, InkSoft)
             ) {
-                Text("RESCAN", color = InkSoft, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                Text("RESCAN", fontFamily = FontFamily.Monospace, fontSize = 10.sp)
             }
             Button(
                 onClick = onConfirm,
-                modifier = Modifier.weight(1.45f).height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.weight(1.55f).height(50.dp),
+                shape = RoundedCornerShape(5.dp)
             ) {
                 Text(
-                    if (index == 5) "USE & BUILD CUBE" else "USE FACE · NEXT",
+                    if (index == 5) "BUILD CUBE →" else "ACCEPT →",
+                    fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -187,62 +198,92 @@ fun FaceConfirmScreen(
 }
 
 @Composable
-private fun PreviewGrid(
-    size: Int,
+private fun PaintableScanGrid(
+    gridSize: Int,
     stickers: List<LiveSticker>,
     overrides: Map<Int, StickerGuess>,
-    selected: Int,
-    onSelect: (Int) -> Unit
+    enabled: Boolean,
+    onPaint: (Int) -> Unit
 ) {
-    Column(
-        Modifier.fillMaxWidth().aspectRatio(1f)
-            .background(Color(0xFF0E1520), RoundedCornerShape(18.dp))
-            .padding(if (size == 3) 8.dp else 5.dp)
-    ) {
-        for (r in 0 until size) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                for (c in 0 until size) {
-                    val idx = r * size + c
-                    val sticker = stickers.getOrNull(idx)
-                    val effectiveGuess = overrides[idx] ?: sticker?.guess ?: StickerGuess.UNKNOWN
-                    val rgb = if (effectiveGuess == StickerGuess.UNKNOWN) {
-                        sticker?.rgb ?: RgbColor(45, 49, 57)
-                    } else {
-                        guessRgb(effectiveGuess)
-                    }
-                    val fill = Color(rgb.argb())
-                    val textColor = readableTextColor(rgb)
-                    val corrected = idx in overrides
-                    val lowConfidence = !corrected && (sticker?.confidence ?: 0f) < .56f
-                    val isSelected = idx == selected
+    val paintCell by rememberUpdatedState(onPaint)
+    val interaction = Modifier.pointerInput(gridSize, enabled) {
+        if (!enabled) return@pointerInput
 
-                    Surface(
-                        modifier = Modifier.weight(1f).fillMaxHeight().padding(2.dp)
-                            .clickable { onSelect(idx) },
-                        color = fill,
-                        shape = RoundedCornerShape(if (size == 3) 12.dp else 7.dp),
-                        border = BorderStroke(
-                            when {
-                                isSelected -> 3.dp
-                                lowConfidence -> 2.dp
-                                else -> 1.dp
-                            },
-                            when {
-                                isSelected -> Accent
-                                corrected -> Color.White.copy(alpha = .9f)
-                                lowConfidence -> Danger
-                                else -> Color.Black.copy(alpha = .28f)
-                            }
-                        )
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                effectiveGuess.label,
-                                color = textColor,
-                                fontSize = if (size == 3) 18.sp else 11.sp,
-                                fontWeight = FontWeight.Black
-                            )
+        fun cellAt(position: Offset): Int? {
+            if (position.x < 0f || position.y < 0f ||
+                position.x >= size.width || position.y >= size.height
+            ) return null
+            val col = (position.x / (size.width.toFloat() / gridSize)).toInt().coerceIn(0, gridSize - 1)
+            val row = (position.y / (size.height.toFloat() / gridSize)).toInt().coerceIn(0, gridSize - 1)
+            return row * gridSize + col
+        }
+
+        awaitEachGesture {
+            var last = -1
+            val down = awaitFirstDown(requireUnconsumed = false)
+            cellAt(down.position)?.let {
+                last = it
+                paintCell(it)
+            }
+            do {
+                val event = awaitPointerEvent()
+                event.changes.forEach { change ->
+                    if (change.pressed) {
+                        val cell = cellAt(change.position)
+                        if (cell != null && cell != last) {
+                            last = cell
+                            paintCell(cell)
                         }
+                        change.consume()
+                    }
+                }
+            } while (event.changes.any { it.pressed })
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth(if (gridSize == 3) .78f else .9f)
+            .aspectRatio(1f)
+            .background(Ink, RoundedCornerShape(7.dp))
+            .padding(if (gridSize == 3) 5.dp else 3.dp)
+            .then(interaction)
+    ) {
+        for (r in 0 until gridSize) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                for (c in 0 until gridSize) {
+                    val idx = r * gridSize + c
+                    val sticker = stickers.getOrNull(idx)
+                    val guess = overrides[idx] ?: sticker?.guess ?: StickerGuess.UNKNOWN
+                    val corrected = idx in overrides
+                    val uncertain = !corrected && (sticker?.confidence ?: 0f) < .56f
+                    val rgb = idealRgbForGuess(guess)
+                    val fill = Color(rgb.argb())
+
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(1.5.dp)
+                            .background(fill, RoundedCornerShape(if (gridSize == 3) 5.dp else 3.dp))
+                            .border(
+                                if (corrected || uncertain) 1.5.dp else .5.dp,
+                                when {
+                                    corrected -> Ink
+                                    uncertain -> Danger
+                                    else -> Color.Black.copy(alpha = .22f)
+                                },
+                                RoundedCornerShape(if (gridSize == 3) 5.dp else 3.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            guess.label,
+                            color = readableTextColor(rgb),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = if (gridSize == 3) 17.sp else 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -251,7 +292,12 @@ private fun PreviewGrid(
 }
 
 @Composable
-private fun ColorPickerRow(selected: StickerGuess, onPick: (StickerGuess) -> Unit) {
+private fun BrushPalette(
+    selected: StickerGuess?,
+    cameraSelected: Boolean,
+    onColor: (StickerGuess) -> Unit,
+    onCamera: () -> Unit
+) {
     val colors = listOf(
         StickerGuess.WHITE,
         StickerGuess.YELLOW,
@@ -260,40 +306,54 @@ private fun ColorPickerRow(selected: StickerGuess, onPick: (StickerGuess) -> Uni
         StickerGuess.GREEN,
         StickerGuess.BLUE
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         colors.forEach { guess ->
-            val rgb = guessRgb(guess)
-            val active = selected == guess
+            val rgb = idealRgbForGuess(guess)
+            val active = selected == guess && !cameraSelected
             Surface(
-                modifier = Modifier.weight(1f).height(40.dp).clickable { onPick(guess) },
+                modifier = Modifier.weight(1f).height(43.dp),
+                onClick = { onColor(guess) },
                 color = Color(rgb.argb()),
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(if (active) 3.dp else 1.dp, if (active) Accent else Color.Black.copy(alpha=.24f))
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(
+                    if (active) 3.dp else 1.dp,
+                    if (active) Ink else Color.Black.copy(alpha = .28f)
+                )
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         guess.label,
                         color = readableTextColor(rgb),
-                        fontWeight = FontWeight.Black,
-                        fontSize = 12.sp
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
                     )
                 }
+            }
+        }
+
+        Surface(
+            modifier = Modifier.weight(1.25f).height(43.dp),
+            onClick = onCamera,
+            color = if (cameraSelected) Ink else Panel,
+            shape = RoundedCornerShape(4.dp),
+            border = BorderStroke(1.dp, InkSoft)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    "AUTO",
+                    color = if (cameraSelected) Panel else Ink,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp
+                )
             }
         }
     }
 }
 
-private fun guessRgb(guess: StickerGuess): RgbColor = when (guess) {
-    StickerGuess.WHITE -> RgbColor(244, 244, 238)
-    StickerGuess.YELLOW -> RgbColor(255, 213, 0)
-    StickerGuess.RED -> RgbColor(195, 28, 37)
-    StickerGuess.ORANGE -> RgbColor(255, 45, 0)
-    StickerGuess.GREEN -> RgbColor(0, 155, 72)
-    StickerGuess.BLUE -> RgbColor(0, 70, 173)
-    StickerGuess.UNKNOWN -> RgbColor(65, 72, 84)
-}
-
 private fun readableTextColor(rgb: RgbColor): Color {
     val luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255.0
-    return if (luminance > .58) Color(0xFF101318) else Color.White
+    return if (luminance > .58) Color(0xFF11120F) else Color.White
 }
