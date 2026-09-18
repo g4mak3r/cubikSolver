@@ -4,8 +4,14 @@ import com.cubecraft.solver.model.Face
 
 data class NormalizedPoint(val x: Float, val y: Float)
 
-enum class StickerGuess(val label: String) {
-    WHITE("W"), YELLOW("Y"), RED("R"), ORANGE("O"), GREEN("G"), BLUE("B"), UNKNOWN("?")
+enum class StickerGuess(val label: String, val displayName: String) {
+    WHITE("W", "WHITE"),
+    YELLOW("Y", "YELLOW"),
+    RED("R", "RED"),
+    ORANGE("O", "ORANGE"),
+    GREEN("G", "GREEN"),
+    BLUE("B", "BLUE"),
+    UNKNOWN("?", "COLOR")
 }
 
 data class LiveSticker(
