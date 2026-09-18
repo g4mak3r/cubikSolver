@@ -20,6 +20,10 @@ class FiveByFiveSolverTest {
         assertStickerStateSolve("Rw U F2 Lw' D R B2 Uw'")
     }
 
+    @Test fun solvesLongerMixedWideScrambleFromStateOnly() {
+        assertStickerStateSolve("Rw U2 Fw' R2 D Lw B U' Rw2 F")
+    }
+
     private fun assertStickerStateSolve(scramble: String) {
         val scannedState = CubeState(5)
         scannedState.applyAll(Move.parseAlgorithm(scramble))
