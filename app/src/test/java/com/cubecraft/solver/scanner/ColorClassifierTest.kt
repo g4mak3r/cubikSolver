@@ -43,7 +43,7 @@ class ColorClassifierTest {
         )
         val captures = com.cubecraft.solver.model.Face.entries.map { face ->
             val color = physical.getValue(face)
-            val canonical = canonicalColorSample(color)
+            val canonical = colorSample(idealDisplayRgb(color))
             CapturedFace(
                 face = face,
                 samples = List(9) { canonical },
