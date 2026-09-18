@@ -347,11 +347,15 @@ private fun pointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
     return inside
 }
 
-private fun inMove(k:StickerKey,m:Move,n:Int)=when(m.face){
-    Face.R->k.x>=n-m.width
-    Face.L->k.x<m.width
-    Face.U->k.y>=n-m.width
-    Face.D->k.y<m.width
-    Face.F->k.z>=n-m.width
-    Face.B->k.z<m.width
+private fun inMove(k: StickerKey, m: Move, n: Int): Boolean {
+    val low = m.depth - 1
+    val high = m.depth + m.width - 2
+    return when (m.face) {
+        Face.R -> k.x in (n - 1 - high)..(n - 1 - low)
+        Face.L -> k.x in low..high
+        Face.U -> k.y in (n - 1 - high)..(n - 1 - low)
+        Face.D -> k.y in low..high
+        Face.F -> k.z in (n - 1 - high)..(n - 1 - low)
+        Face.B -> k.z in low..high
+    }
 }
