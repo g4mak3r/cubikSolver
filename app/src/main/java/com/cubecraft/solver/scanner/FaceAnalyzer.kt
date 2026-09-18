@@ -213,9 +213,8 @@ class FaceAnalyzer(
     )
 
     private fun sampleSquare(square: Mat, n: Int): SampleBatch {
-        val rgb = Mat(); val lab = Mat()
+        val rgb = Mat()
         Imgproc.cvtColor(square, rgb, Imgproc.COLOR_RGBA2RGB)
-        Imgproc.cvtColor(rgb, lab, Imgproc.COLOR_RGB2Lab)
         val cell = square.cols().toDouble() / n
         val samples = ArrayList<ColorSample>(n*n)
         val confidences = ArrayList<Float>(n*n)
@@ -228,34 +227,68 @@ class FaceAnalyzer(
             val y0 = (r * cell + margin).toInt().coerceIn(0, rgb.rows()-2)
             val y1 = ((r + 1) * cell - margin).toInt().coerceIn(y0+1, rgb.rows())
             val roiRgb = rgb.submat(y0, y1, x0, x1)
-            val roiLab = lab.submat(y0, y1, x0, x1)
-            val mr = Core.mean(roiRgb); val ml = Core.mean(roiLab)
-            val mean = MatOfDouble(); val std = MatOfDouble()
+            val mean = MatOfDouble()
+            val std = MatOfDouble()
             Core.meanStdDev(roiRgb, mean, std)
             val sd = std.toArray()
             val avgStd = if (sd.isNotEmpty()) sd.average() else 50.0
-            mean.release(); std.release()
+            mean.release()
+            std.release()
 
-            val rgbColor = RgbColor(mr.`val`[0].toInt(), mr.`val`[1].toInt(), mr.`val`[2].toInt())
-            val sample = ColorSample(LabColor(ml.`val`[0], ml.`val`[1], ml.`val`[2]), rgbColor)
+            val rgbColor = robustRgb(roiRgb)
+            val sample = colorSample(rgbColor)
             val uniform = (1.0 - avgStd / 72.0).coerceIn(0.0, 1.0)
-            val lum = (mr.`val`[0] + mr.`val`[1] + mr.`val`[2]) / 3.0
+            val lum = (rgbColor.r + rgbColor.g + rgbColor.b) / 3.0
             val exposure = (1.0 - abs(lum - 138.0) / 175.0).coerceIn(0.0, 1.0)
             val guess = provisionalGuess(rgbColor)
-            val confidence = (.58 * uniform + .22 * exposure + .20 * guess.second).toFloat().coerceIn(.05f, 1f)
+            val confidence = (.55 * uniform + .18 * exposure + .27 * guess.second).toFloat().coerceIn(.05f, 1f)
 
             samples += sample
             confidences += confidence
             live += LiveSticker(rgbColor, guess.first, confidence)
-            roiRgb.release(); roiLab.release()
+            roiRgb.release()
         }
-        rgb.release(); lab.release()
+        rgb.release()
         return SampleBatch(samples, confidences, live)
     }
 
     
     private fun provisionalGuess(rgb: RgbColor): Pair<StickerGuess, Double> =
-        canonicalGuess(rgb)
+        recognitionGuess(rgb)
+
+    private fun robustRgb(roi: Mat): RgbColor {
+        val small = Mat()
+        Imgproc.resize(roi, small, Size(12.0, 12.0), 0.0, 0.0, Imgproc.INTER_AREA)
+        val bytes = ByteArray((small.total() * small.channels()).toInt())
+        small.get(0, 0, bytes)
+        small.release()
+
+        val pixels = bytes.size / 3
+        val r = IntArray(pixels)
+        val g = IntArray(pixels)
+        val b = IntArray(pixels)
+
+        var p = 0
+        var i = 0
+        while (i + 2 < bytes.size) {
+            r[p] = bytes[i].toInt() and 0xFF
+            g[p] = bytes[i + 1].toInt() and 0xFF
+            b[p] = bytes[i + 2].toInt() and 0xFF
+            p++
+            i += 3
+        }
+
+        return RgbColor(trimmedMean(r), trimmedMean(g), trimmedMean(b))
+    }
+
+    private fun trimmedMean(values: IntArray): Int {
+        values.sort()
+        val from = values.size / 5
+        val to = values.size - from
+        var total = 0L
+        for (i in from until to) total += values[i]
+        return (total / (to - from).coerceAtLeast(1)).toInt()
+    }
 
     private fun yuv420ToRgba(image: ImageProxy): Mat {
         val w = image.width; val h = image.height
