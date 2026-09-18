@@ -450,10 +450,11 @@ private fun moveInstruction(move: Move): String {
         Face.F -> "FRONT"
         Face.B -> "BACK"
     }
-    val layer = when (move.width) {
-        1 -> ""
-        2 -> " · 2 LAYERS"
-        else -> " · " + move.width + " LAYERS"
+    val layer = when {
+        move.depth == 1 && move.width == 1 -> ""
+        move.depth == 1 -> " · " + move.width + " LAYERS"
+        move.width == 1 -> " · LAYER " + move.depth
+        else -> " · LAYERS " + move.depth + "-" + (move.depth + move.width - 1)
     }
     val direction = when (move.quarterTurns) {
         1 -> "CLOCKWISE"
