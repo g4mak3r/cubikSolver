@@ -273,7 +273,8 @@ internal object FiveByFiveMacroReduction {
                 // finisher behind deep=true (which is only used by edge pairing). That is exactly
                 // where real scans tended to die at 51-53/54 centres. Use the dedicated tail pool
                 // for both stages once we are close to the target.
-                if (step == null && before >= target - DEEP_WINDOW && finishers.isNotEmpty()) {
+                val rescueWindow = if (deep) 14 else DEEP_WINDOW
+                if (step == null && before >= target - rescueWindow && finishers.isNotEmpty()) {
                     step = findOperator(state, finishers, wrappersOne) { candidate ->
                         legal(candidate) && score(candidate) > before
                     } ?: findOperator(state, narrowSlice(finishers), wrappersTwo) { candidate ->
@@ -281,13 +282,13 @@ internal object FiveByFiveMacroReduction {
                     }
                 }
 
-                if (step == null && deep && before >= target - DEEP_WINDOW) {
+                if (step == null && deep && before >= target - rescueWindow) {
                     step = findOperator(state, narrowSlice(operators), wrappersTwo) { candidate ->
                         legal(candidate) && score(candidate) > before
                     }
                 }
 
-                if (step == null && before >= target - DEEP_WINDOW) {
+                if (step == null && before >= target - rescueWindow) {
                     step = beamRescue(state, target, score, legal, operators, finishers, deep)
                 }
 
@@ -911,6 +912,15 @@ internal object FiveByFiveMacroReduction {
             return count
         }
 
+        /**
+         * Smooth edge-pairing score: each of the 24 movable wing cubies earns one point when its
+         * ordered color pair matches the fixed middle edge cubie in that slot.
+         *
+         * The previous score was effectively 0/1/2 per whole edge. Pairing only one wing therefore
+         * looked like "no progress", which made the reducer wander on real random states. Scoring
+         * the two wings independently gives the search the same incremental signal a human
+         * reduction method uses: pair one wing, then the other.
+         */
         fun edgeQualityScore(state: ByteArray): Int {
             var total = 0
             for (slot in edgeSlots) total += edgeQuality(state, slot)
@@ -926,17 +936,15 @@ internal object FiveByFiveMacroReduction {
         }
 
         private fun edgeQuality(state: ByteArray, slot: EdgeSlot): Int {
-            val firstA = state[slot.a[0]]
-            val firstB = state[slot.b[0]]
-            var paired = true
-            var sameColors = true
-            for (k in 1 until slot.a.size) {
-                val a = state[slot.a[k]]
-                val b = state[slot.b[k]]
-                if (a != firstA || b != firstB) paired = false
-                if (!((a == firstA && b == firstB) || (a == firstB && b == firstA))) sameColors = false
+            // buildEdgeSlots() sorts the three physical pieces by their variable coordinate,
+            // so index 1 is the fixed middle edge cubie on an odd 5x5.
+            val middleA = state[slot.a[1]]
+            val middleB = state[slot.b[1]]
+            var score = 0
+            for (k in intArrayOf(0, 2)) {
+                if (state[slot.a[k]] == middleA && state[slot.b[k]] == middleB) score++
             }
-            return if (paired) 2 else if (sameColors) 1 else 0
+            return score
         }
 
         fun edgeStickerMismatch(a: ByteArray, b: ByteArray): Int {
