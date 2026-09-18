@@ -126,7 +126,7 @@ fun StudioScreen(
         } else {
             ManualControlsMinimal(
                 size, width, turns, editMode, canReturnToScan,
-                onWidth, onTurns, onMove, onUndo, onRedo, onReturnScan, onReset, onSolve, solving
+                { width = it }, { turns = it }, onMove, onUndo, onRedo, onReturnScan, onReset, onSolve, solving
             )
         }
 
