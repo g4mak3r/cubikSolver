@@ -996,7 +996,7 @@ internal object FiveByFiveMacroReduction {
             val destinationForSource = IntArray(FACELETS)
             for (source in 0 until FACELETS) {
                 var key = keys[source]
-                if (key.inSlab5(move.face, move.width, N)) {
+                if (key.inSlab5(move.face, move.width, move.depth, N)) {
                     repeat(move.quarterTurns) { key = key.rotateClockwise5(move.face, N) }
                 }
                 destinationForSource[source] = indexByKey.getValue(key)
@@ -1049,8 +1049,7 @@ internal object FiveByFiveMacroReduction {
     /** Pure single layer at 1-based depth [layer], expressed through nested wide turns. */
     private fun innerLayer(face: Face, layer: Int, turns: Int): List<Move> {
         require(layer in 2..3)
-        val inverse = if (turns == 2) 2 else 4 - turns
-        return listOf(Move(face, layer, turns), Move(face, layer - 1, inverse))
+        return listOf(Move(face, 1, turns, layer))
     }
 
     private fun seedEdgeAlgorithms(): List<List<Move>> = listOf(
@@ -1077,13 +1076,17 @@ internal object FiveByFiveMacroReduction {
         FiveByFiveMoveOptimizer.optimize(moves)
 }
 
-private fun StickerKey.inSlab5(face: Face, width: Int, n: Int): Boolean = when (face) {
-    Face.R -> x >= n - width
-    Face.L -> x < width
-    Face.U -> y >= n - width
-    Face.D -> y < width
-    Face.F -> z >= n - width
-    Face.B -> z < width
+private fun StickerKey.inSlab5(face: Face, width: Int, depth: Int, n: Int): Boolean {
+    val low = depth - 1
+    val high = depth + width - 2
+    return when (face) {
+        Face.R -> x in (n - 1 - high)..(n - 1 - low)
+        Face.L -> x in low..high
+        Face.U -> y in (n - 1 - high)..(n - 1 - low)
+        Face.D -> y in low..high
+        Face.F -> z in (n - 1 - high)..(n - 1 - low)
+        Face.B -> z in low..high
+    }
 }
 
 private fun StickerKey.rotateClockwise5(face: Face, n: Int): StickerKey = when (face) {
