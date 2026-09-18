@@ -3,6 +3,7 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
