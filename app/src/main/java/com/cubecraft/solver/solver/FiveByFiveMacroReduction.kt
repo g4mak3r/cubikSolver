@@ -119,6 +119,28 @@ internal object FiveByFiveMacroReduction {
             }
         }
 
+        private val nativeWrappersNone by lazy { nativeWrappers(wrappersNone) }
+        private val nativeWrappersOne by lazy { nativeWrappers(wrappersOne) }
+        private val nativeWrappersTwo by lazy { nativeWrappers(wrappersTwo) }
+
+        private fun nativeWrappers(
+            wrappers: List<Wrapper>
+        ): NativeFiveByFiveKernel.WrapperPool? =
+            NativeFiveByFiveKernel.createWrapperPool(
+                wrappers.map { it.setup },
+                wrappers.map { it.undo }
+            )
+
+        private fun nativeWrappersFor(
+            wrappers: List<Wrapper>
+        ): NativeFiveByFiveKernel.WrapperPool? =
+            when {
+                wrappers === wrappersNone -> nativeWrappersNone
+                wrappers === wrappersOne -> nativeWrappersOne
+                wrappers === wrappersTwo -> nativeWrappersTwo
+                else -> null
+            }
+
         private val scratchA = ByteArray(FACELETS)
         private val scratchB = ByteArray(FACELETS)
         private val scratchC = ByteArray(FACELETS)
@@ -376,27 +398,24 @@ internal object FiveByFiveMacroReduction {
             fallback: (ByteArray) -> Boolean
         ): List<Move>? {
             val native = pool.nativeFor(operators)
-            if (native != null) {
+            val nativeWrappers = nativeWrappersFor(wrappers)
+            if (native != null && nativeWrappers != null) {
                 val mode = if (deep) {
                     NativeFiveByFiveKernel.MODE_EDGES
                 } else {
                     NativeFiveByFiveKernel.MODE_CENTERS
                 }
-                for (wrap in wrappers) {
-                    if (outOfTime()) return null
-                    val staged = stage(state, wrap.setup)
-                    val index = native.findFirstImproving(
-                        staged,
-                        wrap.undo,
-                        mode,
-                        before,
-                        deep
-                    )
-                    if (index >= 0) {
-                        return buildSequence(wrap, operators[index])
-                    }
-                }
-                return null
+                val result = native.findFirstWrapped(
+                    nativeWrappers,
+                    state,
+                    mode,
+                    before,
+                    deep
+                ) ?: return null
+                return buildSequence(
+                    wrappers[result.wrapper],
+                    operators[result.index]
+                )
             }
             return findOperator(state, operators, wrappers, fallback)
         }
@@ -412,32 +431,24 @@ internal object FiveByFiveMacroReduction {
             score: (ByteArray) -> Int
         ): List<Move>? {
             val native = pool.nativeFor(operators)
-            if (native != null) {
+            val nativeWrappers = nativeWrappersFor(wrappers)
+            if (native != null && nativeWrappers != null) {
                 val mode = if (deep) {
                     NativeFiveByFiveKernel.MODE_EDGES
                 } else {
                     NativeFiveByFiveKernel.MODE_CENTERS
                 }
-                val floor = before - allowance
-                var bestScore = Int.MIN_VALUE
-                var selected: List<Move>? = null
-
-                for (wrap in wrappers) {
-                    if (outOfTime()) return selected
-                    val staged = stage(state, wrap.setup)
-                    val result = native.findBest(
-                        staged,
-                        wrap.undo,
-                        mode,
-                        floor,
-                        deep
-                    ) ?: continue
-                    if (result.score > bestScore) {
-                        bestScore = result.score
-                        selected = buildSequence(wrap, operators[result.index])
-                    }
-                }
-                return selected
+                val result = native.findBestWrapped(
+                    nativeWrappers,
+                    state,
+                    mode,
+                    before - allowance,
+                    deep
+                ) ?: return null
+                return buildSequence(
+                    wrappers[result.wrapper],
+                    operators[result.index]
+                )
             }
             return bestSideways(
                 state,
@@ -581,7 +592,7 @@ internal object FiveByFiveMacroReduction {
         }
 
         private fun narrowSlice(operators: List<Operator>): List<Operator> =
-            if (operators.size <= NARROW_SLICE) operators else operators.subList(0, NARROW_SLICE)
+            pool.narrowFor(operators)
 
         private fun perturbation(): List<Move> = listOf(
             pool.carrierAtoms[random.nextInt(pool.carrierAtoms.size)].moves,
@@ -825,9 +836,44 @@ internal object FiveByFiveMacroReduction {
         private val nativeCentreFine by lazy {
             NativeFiveByFiveKernel.createPool(centreFine.map { it.perm })
         }
+        private val narrowCentreSafeOps by lazy {
+            if (centreSafe.size <= NARROW_SLICE) centreSafe else centreSafe.subList(0, NARROW_SLICE)
+        }
+        private val narrowNarrowCentreOps by lazy {
+            if (narrowCentre.size <= NARROW_SLICE) narrowCentre else narrowCentre.subList(0, NARROW_SLICE)
+        }
+        private val narrowCentreFineOps by lazy {
+            if (centreFine.size <= NARROW_SLICE) centreFine else centreFine.subList(0, NARROW_SLICE)
+        }
+        private val narrowEdgeFinishersOps by lazy {
+            if (edgeFinishers.size <= NARROW_SLICE) edgeFinishers else edgeFinishers.subList(0, NARROW_SLICE)
+        }
+
         private val nativeEdgeFinishers by lazy {
             NativeFiveByFiveKernel.createPool(edgeFinishers.map { it.perm })
         }
+        private val nativeNarrowCentreSafe by lazy {
+            NativeFiveByFiveKernel.createPool(narrowCentreSafeOps.map { it.perm })
+        }
+        private val nativeNarrowNarrowCentre by lazy {
+            NativeFiveByFiveKernel.createPool(narrowNarrowCentreOps.map { it.perm })
+        }
+        private val nativeNarrowCentreFine by lazy {
+            NativeFiveByFiveKernel.createPool(narrowCentreFineOps.map { it.perm })
+        }
+        private val nativeNarrowEdgeFinishers by lazy {
+            NativeFiveByFiveKernel.createPool(narrowEdgeFinishersOps.map { it.perm })
+        }
+
+        fun narrowFor(operators: List<Operator>): List<Operator> =
+            when {
+                operators === centreSafe -> narrowCentreSafeOps
+                operators === narrowCentre -> narrowNarrowCentreOps
+                operators === centreFine -> narrowCentreFineOps
+                operators === edgeFinishers -> narrowEdgeFinishersOps
+                operators.size <= NARROW_SLICE -> operators
+                else -> operators.subList(0, NARROW_SLICE)
+            }
 
         fun nativeFor(operators: List<Operator>): NativeFiveByFiveKernel.Pool? =
             when {
@@ -835,6 +881,10 @@ internal object FiveByFiveMacroReduction {
                 operators === narrowCentre -> nativeNarrowCentre
                 operators === centreFine -> nativeCentreFine
                 operators === edgeFinishers -> nativeEdgeFinishers
+                operators === narrowCentreSafeOps -> nativeNarrowCentreSafe
+                operators === narrowNarrowCentreOps -> nativeNarrowNarrowCentre
+                operators === narrowCentreFineOps -> nativeNarrowCentreFine
+                operators === narrowEdgeFinishersOps -> nativeNarrowEdgeFinishers
                 else -> null
             }
 
