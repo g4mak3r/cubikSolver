@@ -274,7 +274,7 @@ internal object FiveByFiveMacroReduction {
                 // finisher behind deep=true (which is only used by edge pairing). That is exactly
                 // where real scans tended to die at 51-53/54 centres. Use the dedicated tail pool
                 // for both stages once we are close to the target.
-                val rescueWindow = if (deep) 14 else DEEP_WINDOW
+                val rescueWindow = if (deep) 240 else DEEP_WINDOW
                 if (step == null && before >= target - rescueWindow && finishers.isNotEmpty()) {
                     step = findOperator(state, finishers, wrappersOne) { candidate ->
                         legal(candidate) && score(candidate) > before
