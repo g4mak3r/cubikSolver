@@ -27,4 +27,12 @@ class RedOrangeColorTest {
         assertTrue(cubeColorDistance(orange, orange) < cubeColorDistance(orange, red))
         assertTrue(cubeColorDistance(red, red) < cubeColorDistance(red, orange))
     }
+
+    @Test fun canonicalDisplayOrangeIsVisuallyDistinctFromRed() {
+        val orange = idealDisplayRgb(StickerGuess.ORANGE)
+        val red = idealDisplayRgb(StickerGuess.RED)
+        assertTrue(orange.g - red.g > 70)
+        assertTrue(orange.r >= red.r)
+        assertTrue(orange.b < red.b)
+    }
 }
