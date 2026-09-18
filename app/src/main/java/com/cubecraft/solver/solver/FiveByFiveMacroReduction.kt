@@ -494,9 +494,11 @@ internal object FiveByFiveMacroReduction {
                     .toInt()
 
                 if (nativeBudget > 100) {
-                    val preferred = pool.narrowFor(
-                        if (finishers.isNotEmpty()) finishers else operators
-                    )
+                    val preferred = if (deep) {
+                        pool.edgeRescue
+                    } else {
+                        pool.narrowFor(if (finishers.isNotEmpty()) finishers else operators)
+                    }
                     val native = pool.nativeFor(preferred)
                     val floor = base - if (deep) 4 else 5
 
@@ -822,6 +824,7 @@ internal object FiveByFiveMacroReduction {
         val narrowCentre: List<Operator>
         val centreFine: List<Operator>
         val edgeFinishers: List<Operator>
+        val edgeRescue: List<Operator>
 
         init {
             val reference = model.solvedFlat
@@ -878,6 +881,12 @@ internal object FiveByFiveMacroReduction {
             narrowCentre = narrow
             centreFine = refineCentre(narrow, reference)
             edgeFinishers = buildEdgeFinishers(safe, reference)
+            edgeRescue = dedupe(
+                edgeFinishers.take(EDGE_RESCUE_FINISHERS) +
+                    centreSafe.take(EDGE_RESCUE_SAFE)
+            ).sortedWith(
+                compareBy<Operator>({ it.moves.size }, { it.edgeSupport })
+            )
         }
 
         private val nativeCentreSafe by lazy {
@@ -904,6 +913,9 @@ internal object FiveByFiveMacroReduction {
 
         private val nativeEdgeFinishers by lazy {
             NativeFiveByFiveKernel.createPool(edgeFinishers.map { it.perm })
+        }
+        private val nativeEdgeRescue by lazy {
+            NativeFiveByFiveKernel.createPool(edgeRescue.map { it.perm })
         }
         private val nativeNarrowCentreSafe by lazy {
             NativeFiveByFiveKernel.createPool(narrowCentreSafeOps.map { it.perm })
@@ -934,6 +946,7 @@ internal object FiveByFiveMacroReduction {
                 operators === narrowCentre -> nativeNarrowCentre
                 operators === centreFine -> nativeCentreFine
                 operators === edgeFinishers -> nativeEdgeFinishers
+                operators === edgeRescue -> nativeEdgeRescue
                 operators === narrowCentreSafeOps -> nativeNarrowCentreSafe
                 operators === narrowNarrowCentreOps -> nativeNarrowNarrowCentre
                 operators === narrowCentreFineOps -> nativeNarrowCentreFine
@@ -947,6 +960,7 @@ internal object FiveByFiveMacroReduction {
             nativeNarrowCentre
             nativeCentreFine
             nativeEdgeFinishers
+            nativeEdgeRescue
             nativeNarrowCentreSafe
             nativeNarrowNarrowCentre
             nativeNarrowCentreFine
@@ -1111,6 +1125,8 @@ internal object FiveByFiveMacroReduction {
             private const val REFINE_CAP = 3000
             private const val REFINE_ROUNDS = 2
             private const val SEED_PARTNERS = 400
+            private const val EDGE_RESCUE_FINISHERS = 360
+            private const val EDGE_RESCUE_SAFE = 360
         }
     }
 
@@ -1345,7 +1361,11 @@ internal object FiveByFiveMacroReduction {
         innerLayer(Face.D, 3, 1) + Move.parseAlgorithm("R F' U R' F") + innerLayer(Face.D, 3, 3),
         Move.parseAlgorithm("3Dw R F' U R' F 3Dw'"),
         Move.parseAlgorithm("Uw' R U2 R' F R' F' R Uw"),
-        Move.parseAlgorithm("Dw R2 F' U R' F Dw'")
+        Move.parseAlgorithm("Dw R2 F' U R' F Dw'"),
+        edgeFlipParity(),
+        inverseSequence(edgeFlipParity()),
+        edgeSwapParity(),
+        inverseSequence(edgeSwapParity())
     ).map(::simplify)
 
     private fun inverseSequence(sequence: List<Move>): List<Move> = sequence.asReversed().map { it.inverse() }

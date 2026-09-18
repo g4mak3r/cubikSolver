@@ -4,7 +4,7 @@ Offline Android Rubik's Cube scanner and solver for 3x3 and 5x5 cubes.
 
 ## Current version
 
-0.10.2
+0.10.3
 
 ## Stack
 
