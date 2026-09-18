@@ -34,9 +34,21 @@ fun Cube3D(
     var pitch by remember { mutableFloatStateOf(0.43f) }
     var zoom by remember { mutableFloatStateOf(1f) }
     val hitPolys = remember { AtomicReference<List<StickerHit>>(emptyList()) }
-    val transition=rememberInfiniteTransition(label="guide")
-    val pulse by transition.animateFloat(0f,1f,infiniteRepeatable(tween(700,easing=FastOutSlowInEasing),RepeatMode.Reverse),label="pulse")
-    val ghostAngle=if(highlight==null) 0f else (8f+8f*pulse) * if(highlight.quarterTurns==3) -1 else 1
+    val transition = rememberInfiniteTransition(label = "guide")
+    val guideProgress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1050, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "guideProgress"
+    )
+    val ghostAngle = highlight?.let { move ->
+        val degrees = if (move.quarterTurns == 2) 180f else 90f
+        val direction = if (move.quarterTurns == 3) -1f else 1f
+        degrees * direction * guideProgress
+    } ?: 0f
     val stickers=remember(revision,cube){ cube.visibleStickers() }
 
     val gestures = modifier
@@ -220,8 +232,8 @@ fun Cube3D(
                 Face.R -> V3(1f,0f,0f)
                 Face.L -> V3(-1f,0f,0f)
             }
-            fun facePoint(face: Face, u: Float, v: Float, outward: Float = .565f): V3 = when(face) {
 
+            fun facePoint(face: Face, u: Float, v: Float, outward: Float = .58f): V3 = when(face) {
                 Face.F -> V3(u, v, outward)
                 Face.B -> V3(-u, v, -outward)
                 Face.U -> V3(u, outward, -v)
@@ -229,63 +241,91 @@ fun Cube3D(
                 Face.R -> V3(outward, v, -u)
                 Face.L -> V3(-outward, v, u)
             }
-            fun drawHead(from: Offset, tip: Offset) {
-                val a = atan2(tip.y-from.y, tip.x-from.x)
-                val len = 18f
-                val wing = .62f
-                val left = Offset(tip.x-len*cos(a-wing), tip.y-len*sin(a-wing))
-                val right = Offset(tip.x-len*cos(a+wing), tip.y-len*sin(a+wing))
-                val head = Path().apply {
-                    moveTo(tip.x,tip.y)
-                    lineTo(left.x,left.y)
-                    lineTo(right.x,right.y)
+
+            fun drawArrowHead(from: Offset, tip: Offset, scale: Float = 1f) {
+                val dx = tip.x - from.x
+                val dy = tip.y - from.y
+                val len = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+                val ux = dx / len
+                val uy = dy / len
+                val px = -uy
+                val py = ux
+                val back = 23f * scale
+                val half = 11f * scale
+                val baseCenter = Offset(tip.x - ux * back, tip.y - uy * back)
+                val left = Offset(baseCenter.x + px * half, baseCenter.y + py * half)
+                val right = Offset(baseCenter.x - px * half, baseCenter.y - py * half)
+
+                val outer = Path().apply {
+                    moveTo(tip.x, tip.y)
+                    lineTo(left.x, left.y)
+                    lineTo(right.x, right.y)
                     close()
                 }
-                drawPath(head, Color.White.copy(alpha=.95f))
-                val innerLen = 14f
-                val il = Offset(tip.x-innerLen*cos(a-wing), tip.y-innerLen*sin(a-wing))
-                val ir = Offset(tip.x-innerLen*cos(a+wing), tip.y-innerLen*sin(a+wing))
+                drawPath(outer, Color.White.copy(alpha = .98f))
+
+                val innerBack = 17f * scale
+                val innerHalf = 7f * scale
+                val innerBase = Offset(tip.x - ux * innerBack, tip.y - uy * innerBack)
+                val innerLeft = Offset(innerBase.x + px * innerHalf, innerBase.y + py * innerHalf)
+                val innerRight = Offset(innerBase.x - px * innerHalf, innerBase.y - py * innerHalf)
                 val inner = Path().apply {
-                    moveTo(tip.x,tip.y)
-                    lineTo(il.x,il.y)
-                    lineTo(ir.x,ir.y)
+                    moveTo(tip.x - ux * 2f, tip.y - uy * 2f)
+                    lineTo(innerLeft.x, innerLeft.y)
+                    lineTo(innerRight.x, innerRight.y)
                     close()
                 }
                 drawPath(inner, Accent)
             }
 
-            if (camera(faceNormal(move.face)).z > -.05f) {
+            if (camera(faceNormal(move.face)).z > -.08f) {
                 val clockwise = move.quarterTurns != 3
-                val startDeg = if (clockwise) 205f else -25f
-                val sweepDeg = if (clockwise) -230f else 230f
-                val radius = .37f + .015f*pulse
-                val samples = 34
+                val radius = .39f
+                val startDeg = if (clockwise) 220f else -40f
+                val magnitude = if (move.quarterTurns == 2) 245f else 132f
+                val sweepDeg = if (clockwise) -magnitude else magnitude
+                val samples = if (move.quarterTurns == 2) 56 else 34
+
                 val points = List(samples) { i ->
-                    val t = i.toFloat()/(samples-1)
-                    val deg = startDeg + sweepDeg*t
+                    val t = i.toFloat() / (samples - 1)
+                    val deg = startDeg + sweepDeg * t
                     val rad = Math.toRadians(deg.toDouble()).toFloat()
-                    project(camera(facePoint(move.face, radius*cos(rad), radius*sin(rad))))
+                    project(camera(facePoint(move.face, radius * cos(rad), radius * sin(rad))))
                 }
+
                 val arrowPath = Path().apply {
-                    moveTo(points.first().x,points.first().y)
-                    points.drop(1).forEach { lineTo(it.x,it.y) }
+                    moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { lineTo(it.x, it.y) }
                 }
+
                 drawPath(
                     arrowPath,
-                    Color.White.copy(alpha=.92f),
-                    style=Stroke(width=12f,cap=StrokeCap.Round,join=StrokeJoin.Round)
+                    Color.Black.copy(alpha = .72f),
+                    style = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+                drawPath(
+                    arrowPath,
+                    Color.White.copy(alpha = .94f),
+                    style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
                 drawPath(
                     arrowPath,
                     Accent,
-                    style=Stroke(width=6.5f,cap=StrokeCap.Round,join=StrokeJoin.Round)
+                    style = Stroke(width = 3.2f, cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
-                drawHead(points[points.lastIndex-1], points.last())
 
+                drawCircle(
+                    color = Color.White.copy(alpha = .9f),
+                    radius = 4.5f,
+                    center = points.first()
+                )
+
+                val headFrom = points[(points.lastIndex - 4).coerceAtLeast(0)]
+                drawArrowHead(headFrom, points.last(), 1f)
 
                 if (move.quarterTurns == 2) {
-                    val mid = samples/2
-                    drawHead(points[mid-1], points[mid])
+                    val second = (points.lastIndex * .54f).roundToInt().coerceIn(4, points.lastIndex - 4)
+                    drawArrowHead(points[second - 4], points[second], .78f)
                 }
             }
         }
