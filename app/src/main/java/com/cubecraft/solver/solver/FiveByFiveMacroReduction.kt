@@ -161,11 +161,12 @@ internal object FiveByFiveMacroReduction {
                 if (outOfTime()) break
 
                 if (!model.centresSolved(current)) {
+                    val nativeCentres = NativeFiveByFiveKernel.available
                     val centreResult = runStage(
                         label = "centres",
                         start = current,
-                        target = CENTRE_SEARCH_TARGET,
-                        score = model::centreSearchScore,
+                        target = if (nativeCentres) CENTRE_SEARCH_TARGET else CENTRE_TARGET,
+                        score = if (nativeCentres) model::centreSearchScore else model::centreScore,
                         legal = { true },
                         operators = pool.narrowCentre,
                         finishers = pool.centreFine,
