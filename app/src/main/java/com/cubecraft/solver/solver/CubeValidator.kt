@@ -18,6 +18,9 @@ class CubeValidator(private val three: Min2PhaseSolver = Min2PhaseSolver()) {
             val skeleton=state.reducedSkeleton3x3()
             three.validate(skeleton)?.let { messages += "Outer-piece validation: $it" }
         }
-        return ValidationReport(messages.isEmpty(), if(messages.isEmpty()) listOf("Color counts, centers and 3x3 skeleton are physically consistent.") else messages)
+        if (messages.isEmpty() && state.size == 5) {
+            FiveByFiveCycles.validatePieces(state)?.let { messages += it }
+        }
+        return ValidationReport(messages.isEmpty(), if(messages.isEmpty()) listOf("Cube pieces and color counts are physically consistent.") else messages)
     }
 }

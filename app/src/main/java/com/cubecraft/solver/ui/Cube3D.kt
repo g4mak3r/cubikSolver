@@ -34,21 +34,20 @@ fun Cube3D(
     var pitch by remember { mutableFloatStateOf(0.43f) }
     var zoom by remember { mutableFloatStateOf(1f) }
     val hitPolys = remember { AtomicReference<List<StickerHit>>(emptyList()) }
-    val transition = rememberInfiniteTransition(label = "guide")
-    val guideProgress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1050, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "guideProgress"
-    )
-    val ghostAngle = highlight?.let { move ->
-        val degrees = if (move.quarterTurns == 2) 180f else 90f
-        val direction = if (move.quarterTurns == 3) -1f else 1f
-        degrees * direction * guideProgress
-    } ?: 0f
+    // Animate only a visible move guide; read the value in draw scope so frames do not
+    // recompose the whole cube or keep an idle studio consuming frames.
+    val guideProgress = if (highlight != null) {
+        val transition = rememberInfiniteTransition(label = "guide")
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1050, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "guideProgress"
+        )
+    } else null
     val stickers=remember(revision,cube){ cube.visibleStickers() }
 
     val gestures = modifier
@@ -69,6 +68,11 @@ fun Cube3D(
         }
 
     Canvas(gestures) {
+        val ghostAngle = highlight?.let { move ->
+            val degrees = if (move.quarterTurns == 2) 180f else 90f
+            val direction = if (move.quarterTurns == 3) -1f else 1f
+            degrees * direction * (guideProgress?.value ?: 0f)
+        } ?: 0f
         val n=cube.size
         val center=Offset(size.width/2,size.height/2)
         val base=size.minDimension*.70f*zoom

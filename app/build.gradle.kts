@@ -17,14 +17,13 @@ kotlin {
 android {
     namespace = "com.cubecraft.solver"
     compileSdk = 35
-    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.cubecraft.solver"
         minSdk = 29
         targetSdk = 35
-        versionCode = 36
-        versionName = "0.10.7"
+        versionCode = 37
+        versionName = "0.11.0"
         vectorDrawables { useSupportLibrary = true }
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -40,11 +39,6 @@ android {
         buildConfig = true
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-        }
-    }
     packaging { resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*") }
 
     testOptions {

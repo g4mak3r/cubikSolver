@@ -17,15 +17,10 @@ class FiveByFiveReductionRegressionTest {
             val state = CubeState(5)
             state.applyAll(Move.parseAlgorithm(scramble))
 
-            val result = FiveByFiveMacroReduction.solve(
-                state = state.deepCopy(),
-                budgetMillis = 12_000L
-            )
-
-            assertTrue(
-                "$scramble -> ${result.diagnostic}",
-                result.centresSolved && result.edgesPaired
-            )
+            val moves = FiveByFiveCycles.reduce(state.deepCopy())
+            state.applyAll(moves)
+            assertTrue("centres: $scramble", FiveByFiveTopology.centersSolved(state))
+            assertTrue("edges: $scramble", FiveByFiveTopology.edgesPaired(state))
         }
     }
 }
