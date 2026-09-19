@@ -7,6 +7,9 @@ import com.cubecraft.solver.model.*
 import com.cubecraft.solver.scanner.*
 import com.cubecraft.solver.solver.*
 import com.cubecraft.solver.ui.defaultPalette
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +45,7 @@ class CubecraftViewModel : ViewModel() {
     private var solutionStart: Map<Face,List<Face>>? = null
     private var originSolved = true
     private var solveRequestId = 0L
+    private var solveJob: Job? = null
     private var validationRequestId = 0L
     private val three = Min2PhaseSolver()
     private val five = FiveByFiveSolver()
@@ -87,6 +91,7 @@ class CubecraftViewModel : ViewModel() {
     val hasBaseline: Boolean get() = baseline != null
 
     fun home() {
+        clearSolution()
         pendingFaceObservation = null
         pendingFaceOverrides = emptyMap()
         screen = AppScreen.HOME
@@ -111,10 +116,11 @@ class CubecraftViewModel : ViewModel() {
     }
 
     fun beginScan(size: Int) {
+        clearSolution()
         cubeSize = size
         if (size == 5) {
             viewModelScope.launch(Dispatchers.Default) {
-                FiveByFiveMacroReduction.prewarm()
+                FiveByFiveCycles.prewarm()
             }
         }
         captures.clear()
@@ -455,13 +461,16 @@ class CubecraftViewModel : ViewModel() {
         solving = true
         message = null
 
-        viewModelScope.launch {
+        solveJob = viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
                 try {
                     if (state.size == 3) three.solve(state)
-                    else if (wasSolvedOrigin) five.solveKnownHistory(state, h) else five.solve(state)
-                } catch (t: Throwable) {
-                    SolverResult.Invalid("Solver error: ${t.message ?: t.javaClass.simpleName}")
+                    else if (wasSolvedOrigin) five.solveKnownHistory(state, h) { ensureActive() }
+                    else five.solve(state) { ensureActive() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    SolverResult.Invalid("Solver error: ${e.message ?: e.javaClass.simpleName}")
                 }
             }
 
@@ -478,10 +487,10 @@ class CubecraftViewModel : ViewModel() {
                     message = if (result.moves.isEmpty()) "SOLVED" else null
                 }
                 is SolverResult.Invalid -> {
-                    message = if (state.size == 5) "5×5 STATE INVALID" else result.reason
+                    message = result.reason
                 }
                 is SolverResult.Unavailable -> {
-                    message = if (state.size == 5) "5×5 · RETRY ANALYZE" else result.reason
+                    message = result.reason
                 }
             }
         }
@@ -529,6 +538,8 @@ class CubecraftViewModel : ViewModel() {
         }
 
     private fun clearSolution() {
+        solveJob?.cancel()
+        solveJob = null
         solveRequestId++
         solving = false
         solution = emptyList()

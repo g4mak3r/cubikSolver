@@ -5,7 +5,7 @@ cubikSolver uses the following third-party components:
 - AndroidX / Jetpack Compose / CameraX - Android Open Source Project licenses.
 - OpenCV 4.13.0 - Apache License 2.0.
 - WCA TNoodle `scrambler-min2phase` 0.19.2, including Chen Shuang's min2phase solver - GPLv3.
-- Parts of the table-free 5x5 reduction strategy are adapted from `Vortezler/rubiks-cube-solver` by Praval - MIT.
+- The removed 0.10.x table-free 5x5 reduction strategy was adapted from `Vortezler/rubiks-cube-solver` by Praval - MIT.
 
 ## MIT notice for rubiks-cube-solver-derived work
 
