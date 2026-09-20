@@ -1,139 +1,47 @@
 package com.cubecraft.solver.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.cubecraft.solver.BuildConfig
+import com.cubecraft.solver.model.CubeState
+import com.cubecraft.solver.model.Move
 
 @Composable
 fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
-    var selected by remember { mutableIntStateOf(3) }
-
-    Column(
-        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Text(
-                "CUBIK/SOLVER",
-                color = Ink,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.1.sp
-            )
-            Spacer(Modifier.weight(1f))
-            androidx.compose.material3.Text(
-                BuildConfig.VERSION_NAME,
-                color = Muted,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp
-            )
+    var selected by rememberSaveable { mutableIntStateOf(3) }
+    val cube = remember(selected) {
+        CubeState(selected).also { it.applyAll(Move.parseAlgorithm("R U F'")) }
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = CubeDesign.Gutter)) {
+        ScreenHeader("cubik", "Your next move, made clear") {
+            AppIcon(CubeIcon.Cube, tint = Accent)
         }
-
-        Spacer(Modifier.weight(1f))
-
-        Box(
-            Modifier.size(148.dp)
-                .border(1.dp, Outline, RoundedCornerShape(10.dp))
-                .background(Panel, RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                androidx.compose.material3.Text(
-                    "CUBIK",
-                    color = Ink,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 34.sp,
-                    lineHeight = 32.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp
-                )
-                androidx.compose.material3.Text(
-                    "SOLVER",
-                    color = Accent,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 3.sp
-                )
-            }
+            Spacer(Modifier.height(24.dp))
+            Eyebrow("A fresh perspective")
+            Spacer(Modifier.height(12.dp))
+            Text("Find your\nnext move.", style = MaterialTheme.typography.displaySmall, color = Ink, textAlign = TextAlign.Center)
+            Cube3D(cube, selected, defaultPalette, null, Modifier.fillMaxWidth().height(228.dp))
+            Text("Scan your cube. Follow each turn.\nSee everything fall into place.", style = MaterialTheme.typography.bodyMedium, color = InkSoft, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
         }
-
-        Spacer(Modifier.height(34.dp))
-
-        Row(
-            Modifier.fillMaxWidth()
-                .border(1.dp, Outline, RoundedCornerShape(4.dp))
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            listOf(3, 5).forEach { n ->
-                val active = selected == n
-                Box(
-                    Modifier.weight(1f).height(48.dp)
-                        .background(if (active) Panel2 else AppBg, RoundedCornerShape(2.dp))
-                        .clickable { selected = n },
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.Text(
-                        "$n×$n",
-                        color = if (active) Accent else InkSoft,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+            ChoiceBar(listOf("3 × 3", "5 × 5"), if (selected == 3) 0 else 1, { selected = if (it == 0) 3 else 5 }, Modifier.fillMaxWidth())
+            AppButton("Scan a cube", { onScan(selected) }, Modifier.fillMaxWidth(), icon = CubeIcon.Scan)
+            AppButton("Explore in 3D", { onVirtual(selected) }, Modifier.fillMaxWidth(), primary = false, icon = CubeIcon.Cube)
+            Text("On your device. Always offline.", Modifier.fillMaxWidth().padding(top = 2.dp), color = Muted, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
         }
-
-        Spacer(Modifier.height(10.dp))
-
-        Button(
-            onClick = { onScan(selected) },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(3.dp)
-        ) {
-            androidx.compose.material3.Text(
-                "SCAN",
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-        }
-
-        Spacer(Modifier.height(7.dp))
-
-        OutlinedButton(
-            onClick = { onVirtual(selected) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(3.dp),
-            border = BorderStroke(1.dp, Outline)
-        ) {
-            androidx.compose.material3.Text(
-                "VIRTUAL",
-                color = InkSoft,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = .8.sp
-            )
-        }
-
-        Spacer(Modifier.weight(1.2f))
     }
 }

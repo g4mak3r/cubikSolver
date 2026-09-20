@@ -22,11 +22,12 @@ android {
         applicationId = "com.cubecraft.solver"
         minSdk = 29
         targetSdk = 35
-        versionCode = 37
-        versionName = "0.11.0"
+        versionCode = 38
+        versionName = "0.12.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf(if (project.hasProperty("emulator")) "x86_64" else "arm64-v8a")
         }
     }
 
@@ -76,4 +77,9 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

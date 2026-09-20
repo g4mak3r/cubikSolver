@@ -12,6 +12,6 @@ val scanSequence = listOf(
     ScanPose(Face.R, "TURN THE CUBE LEFT"),
     ScanPose(Face.B, "TURN THE CUBE LEFT"),
     ScanPose(Face.L, "TURN THE CUBE LEFT"),
-    ScanPose(Face.U, "RETURN TO THE FIRST FACE · TILT UP"),
-    ScanPose(Face.D, "KEEP THE FIRST FACE FRONT · TILT DOWN")
+    ScanPose(Face.U, "RETURN TO THE FIRST FACE, THEN TILT UP"),
+    ScanPose(Face.D, "KEEP THE FIRST FACE FRONT, THEN TILT DOWN")
 )

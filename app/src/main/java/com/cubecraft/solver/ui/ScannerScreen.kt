@@ -18,6 +18,9 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -114,169 +117,75 @@ fun ScannerScreen(
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    ScannerLayout(
+        gridSize, pose, index, expectedCenter, latest, introSettled, granted,
+        pendingCapture, cameraError, ::capture, onBack,
+        { launcher.launch(Manifest.permission.CAMERA) },
+        capturedFaces = capturedFaces
     ) {
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                (index + 1).toString() + "/6",
-                color = Muted,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp
-            )
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        val guideHeight by animateDpAsState(
-            targetValue = if (index == 0 && !introSettled) 190.dp else 112.dp,
-            animationSpec = tween(650, easing = FastOutSlowInEasing),
-            label = "scanGuideHeight"
-        )
-        val cameraAlpha by animateFloatAsState(
-            targetValue = if (index == 0 && !introSettled) 0f else 1f,
-            animationSpec = tween(420),
-            label = "scanCameraAlpha"
-        )
-
-        ScanOrientationGuide(
+        CameraPreview(
             gridSize = gridSize,
-            index = index,
-            pose = pose,
-            capturedFaces = capturedFaces,
-            modifier = Modifier.fillMaxWidth().height(guideHeight)
-        )
-
-        val centerSticker = latest?.stickers?.getOrNull(gridSize * gridSize / 2)
-        val liveCenter = centerSticker
-            ?.takeIf { it.confidence >= .36f }
-            ?.guess
-        val targetMatched = expectedCenter != null && liveCenter == expectedCenter
-
-        ScanGuidance(
-            index = index,
-            pose = pose,
-            expectedCenter = expectedCenter,
-            matched = targetMatched
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1f)
-                .alpha(cameraAlpha)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Viewport)
-                .border(1.dp, Outline, RoundedCornerShape(6.dp))
-        ) {
-            if (granted) {
-                CameraPreview(
-                    gridSize = gridSize,
-                    onObservation = { observation ->
-                        if (observation != null && observation.timestampMs >= acceptFramesAfter) {
-                            latest = observation
-                            if (pendingCapture) {
-                                pendingCapture = false
-                                onCapture(observation)
-                            }
-                        }
-                    },
-                    onError = { cameraError = it }
-                )
-                ScanOverlay(gridSize, latest)
-            } else {
-                Button(
-                    onClick = { launcher.launch(Manifest.permission.CAMERA) },
-                    modifier = Modifier.align(Alignment.Center),
-                    shape = RoundedCornerShape(3.dp)
-                ) {
-                    Text("ALLOW CAMERA", fontFamily = FontFamily.Monospace)
+            onObservation = { observation ->
+                if (observation != null && observation.timestampMs >= acceptFramesAfter) {
+                    latest = observation
+                    if (pendingCapture) { pendingCapture = false; onCapture(observation) }
                 }
-            }
-        }
-
-        if (cameraError != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                cameraError.orEmpty(),
-                color = Danger,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp,
-                maxLines = 2
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Button(
-            onClick = ::capture,
-            enabled = granted && cameraError == null,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(3.dp)
-        ) {
-            Text(
-                if (pendingCapture) "HOLD" else "CAPTURE",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                letterSpacing = 1.sp
-            )
-        }
-        Spacer(Modifier.height(12.dp))
+            },
+            onError = { cameraError = it }
+        )
     }
 }
 
+/** Camera-independent chrome also used by instrumented layout checks. */
 @Composable
-private fun ScanGuidance(
-    index: Int,
-    pose: ScanPose,
-    expectedCenter: StickerGuess?,
-    matched: Boolean
+internal fun ScannerLayout(
+    gridSize: Int, pose: ScanPose, index: Int, expectedCenter: StickerGuess?, latest: FaceObservation?,
+    introSettled: Boolean, granted: Boolean, pendingCapture: Boolean, cameraError: String?,
+    onCapture: () -> Unit, onBack: () -> Unit, onPermission: () -> Unit,
+    capturedFaces: Map<Face, List<StickerGuess>> = emptyMap(),
+    camera: @Composable BoxScope.() -> Unit
 ) {
-    Column(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            pose.title,
-            color = Ink,
-            fontFamily = FontFamily.Monospace,
-            fontSize = if (index == 0) 13.sp else 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = .7.sp
-        )
-
-        if (expectedCenter != null) {
-            Spacer(Modifier.height(5.dp))
-            val rgb = idealRgbForGuess(expectedCenter)
-            val color = Color(rgb.argb())
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(12.dp)
-                        .background(color, RoundedCornerShape(2.dp))
-                        .border(
-                            if (matched) 2.dp else 1.dp,
-                            if (matched) Accent else Outline,
-                            RoundedCornerShape(2.dp)
-                        )
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    expectedCenter.displayName,
-                    color = if (matched) Accent else InkSoft,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
+    val center = latest?.stickers?.getOrNull(gridSize * gridSize / 2)
+    val matched = expectedCenter != null && center?.guess == expectedCenter && center.confidence >= .36f
+    val guideHeight by animateDpAsState(if (granted && index == 0 && !introSettled) 172.dp else 112.dp, tween(600, easing = FastOutSlowInEasing), label = "guideDock")
+    val cameraAlpha by animateFloatAsState(if (granted && index == 0 && !introSettled) 0f else 1f, tween(CubeDesign.ScreenMillis), label = "cameraReveal")
+    Column(Modifier.fillMaxSize().padding(horizontal = CubeDesign.Gutter)) {
+        ScreenHeader("Scan your cube", "Face ${index + 1} of 6 · $gridSize × $gridSize", onBack)
+        ScanSteps(index, Modifier.padding(bottom = 16.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            androidx.compose.material3.Surface(color = Panel, shape = CubeDesign.PanelShape) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    ScanOrientationGuide(gridSize, index, pose, capturedFaces, Modifier.width(108.dp).height(guideHeight))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(pose.title.lowercase().replaceFirstChar { it.uppercase() }, color = Ink, style = MaterialTheme.typography.titleSmall)
+                        if (expectedCenter != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(Modifier.size(12.dp).clip(RoundedCornerShape(4.dp)).background(Color(idealRgbForGuess(expectedCenter).argb())))
+                                Text("${expectedCenter.displayName.lowercase().replaceFirstChar { it.uppercase() }} center", color = if (matched) Success else InkSoft, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
             }
+            Box(Modifier.fillMaxWidth().aspectRatio(1f).alpha(cameraAlpha).clip(CubeDesign.PanelShape).background(Viewport).border(1.dp, Outline, CubeDesign.PanelShape)) {
+                if (granted) {
+                    camera()
+                    ScanOverlay(gridSize, latest)
+                } else {
+                    Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        AppIcon(CubeIcon.Scan, Modifier.size(36.dp), Accent)
+                        Text("Bring your cube into view", style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("Camera access is used only to read the sticker colors.", color = InkSoft, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        AppButton("Allow camera", onPermission)
+                    }
+                }
+            }
+            if (cameraError != null) StatusNote("Camera unavailable", cameraError, error = true)
+            else Text(if (pendingCapture) "Hold still. Waiting for a clear frame…" else "Keep one face inside the grid. You can correct its colors next.", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
         }
+        AppButton(if (pendingCapture) "Hold still…" else "Capture face", onCapture,
+            Modifier.fillMaxWidth().padding(vertical = 12.dp), enabled = granted && cameraError == null && !pendingCapture, icon = CubeIcon.Scan)
     }
 }
 
@@ -291,6 +200,7 @@ private fun CameraPreview(
     var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val observationCallback = rememberUpdatedState(onObservation)
     val errorCallback = rememberUpdatedState(onError)
+    val active = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
 
     AndroidView(
         factory = { context ->
@@ -300,6 +210,7 @@ private fun CameraPreview(
                 val view = this
                 val future = ProcessCameraProvider.getInstance(context)
                 future.addListener({
+                    if (!active.get()) return@addListener
                     try {
                         val cameraProvider = future.get()
                         provider = cameraProvider
@@ -311,7 +222,7 @@ private fun CameraPreview(
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
                         analysis.setAnalyzer(executor, FaceAnalyzer(gridSize) { observation ->
-                            view.post { observationCallback.value(observation) }
+                            view.post { if (active.get()) observationCallback.value(observation) }
                         })
                         cameraProvider.unbindAll()
                         val camera = cameraProvider.bindToLifecycle(
@@ -346,6 +257,7 @@ private fun CameraPreview(
 
     DisposableEffect(Unit) {
         onDispose {
+            active.set(false)
             provider?.unbindAll()
             executor.shutdownNow()
         }
@@ -354,6 +266,13 @@ private fun CameraPreview(
 
 @Composable
 private fun ScanOverlay(n: Int, observation: FaceObservation?) {
+    val paint = remember {
+        AndroidPaint().apply {
+            isAntiAlias = true
+            textAlign = AndroidPaint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+    }
     Canvas(Modifier.fillMaxSize()) {
         val frameW = observation?.frameWidth?.takeIf { it > 0 }?.toFloat() ?: 1f
         val frameH = observation?.frameHeight?.takeIf { it > 0 }?.toFloat() ?: 1f
@@ -420,7 +339,7 @@ private fun ScanOverlay(n: Int, observation: FaceObservation?) {
 
                 val luminance =
                     (.2126 * display.r + .7152 * display.g + .0722 * display.b) / 255.0
-                val paint = AndroidPaint().apply {
+                paint.apply {
                     isAntiAlias = true
                     this.color = if (luminance > .58) {
                         android.graphics.Color.BLACK

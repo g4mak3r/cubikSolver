@@ -55,6 +55,7 @@ fun ScanOrientationGuide(
     }
 
     LaunchedEffect(index) {
+        if (index == 0) return@LaunchedEffect
         while (true) {
             when (index) {
                 0 -> {
@@ -112,16 +113,7 @@ fun ScanOrientationGuide(
         }
     }
 
-    val pulse = rememberInfiniteTransition(label = "scanTargetPulse")
-    val targetAlpha by pulse.animateFloat(
-        initialValue = .48f,
-        targetValue = .95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scanTargetAlpha"
-    )
+    val targetAlpha = .85f
 
     Canvas(modifier) {
         val center = Offset(size.width / 2f, size.height / 2f)

@@ -4,7 +4,7 @@ Offline Android Rubik's Cube scanner and solver for 3x3 and 5x5 cubes.
 
 ## Current version
 
-0.11.0
+0.12.0
 
 ## Stack
 
@@ -31,5 +31,7 @@ fast offline solving over short solutions (typically several hundred moves).
 Its three small setup tables are built once and shared between solves.
 
 The app is designed to work offline at runtime.
+
+The shared visual, component and motion rules are documented in [DESIGN.md](DESIGN.md).
 
 Third-party attribution and license notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
