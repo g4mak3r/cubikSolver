@@ -27,7 +27,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Compile, unit tests and debug APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug
+        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleDebugAndroidTest
 
       - name: Upload debug APK
         if: success()
