@@ -1,367 +1,112 @@
 package com.cubecraft.solver.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.cubecraft.solver.model.Face
 import com.cubecraft.solver.scanner.RgbColor
 import com.cubecraft.solver.scanner.StickerGuess
-import com.cubecraft.solver.scanner.canonicalStickerGuesses
 import com.cubecraft.solver.solver.ValidationReport
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewScreen(
-    size: Int,
-    faces: Map<Face, List<Face>>,
-    palette: Map<Face, RgbColor>,
-    colorFaces: Map<StickerGuess, Face>,
-    report: ValidationReport?,
-    message: String?,
-    onRotate: (Face) -> Unit,
-    onSetColor: (Face, Int, Face) -> Unit,
-    onAccept: () -> Unit,
-    onRescan: () -> Unit,
-    onBack: () -> Unit
+    size: Int, faces: Map<Face, List<Face>>, palette: Map<Face, RgbColor>,
+    colorFaces: Map<StickerGuess, Face>, report: ValidationReport?, message: String?,
+    onRotate: (Face) -> Unit, onSetColor: (Face, Int, Face) -> Unit,
+    onAccept: () -> Unit, onRescan: () -> Unit, onBack: () -> Unit
 ) {
     var editingFace by remember { mutableStateOf<Face?>(null) }
-
-    Column(
-        Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
+    Column(Modifier.fillMaxSize().padding(horizontal = CubeDesign.Gutter)) {
+        ScreenHeader("Your cube", "All six faces captured", onBack)
+        ScanSteps(5, Modifier.padding(bottom = 20.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text("One final look.", style = MaterialTheme.typography.headlineMedium)
+            Text("Tap a face to adjust its colors or orientation before solving.", style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+            AppPanel {
+                Eyebrow("$size × $size · unfolded view")
+                CubeNet(size, faces, palette) { editingFace = it }
             }
-            Spacer(Modifier.weight(1f))
-        }
-
-        Box(
-            Modifier.fillMaxWidth().weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            CubeNet(size, faces, palette) { editingFace = it }
-        }
-
-        if (report?.ok == false) {
-            Text(
-                report.messages.firstOrNull() ?: message ?: "CHECK STATE",
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                color = Danger,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 9.sp,
-                lineHeight = 12.sp,
-                maxLines = 2
-            )
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(
-                onClick = onRescan,
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = RoundedCornerShape(3.dp),
-                border = BorderStroke(1.dp, Outline)
-            ) {
-                Text("RESCAN", color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            when {
+                report == null -> {
+                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent, trackColor = Panel2)
+                    Text("Checking your cube…", style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+                }
+                report.ok -> StatusNote("Ready to solve", "All pieces and colors are consistent.", success = true)
+                else -> StatusNote("A detail needs attention", report.messages.joinToString("\n").ifBlank { message.orEmpty() }, error = true)
             }
-            Button(
-                onClick = onAccept,
-                enabled = report?.ok == true,
-                modifier = Modifier.weight(1.35f).height(48.dp),
-                shape = RoundedCornerShape(3.dp)
-            ) {
-                Text(
-                    "CONTINUE",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = .7.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-    }
-
-    editingFace?.let { face ->
-        FaceEditor(
-            size = size,
-            face = face,
-            colors = faces.getValue(face),
-            palette = palette,
-            colorFaces = colorFaces,
-            onSetColor = { index, color -> onSetColor(face, index, color) },
-            onRotate = { onRotate(face) },
-            onDismiss = { editingFace = null }
-        )
-    }
-}
-
-@Composable
-private fun FaceEditor(
-    size: Int,
-    face: Face,
-    colors: List<Face>,
-    palette: Map<Face, RgbColor>,
-    colorFaces: Map<StickerGuess, Face>,
-    onSetColor: (Int, Face) -> Unit,
-    onRotate: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val center = size * size / 2
-    var brush by remember(face) { mutableStateOf<StickerGuess?>(null) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Column(
-            Modifier.fillMaxSize().background(AppBg).padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss, contentPadding = PaddingValues(0.dp)) {
-                    Text("←", color = Ink, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onRotate) {
-                    Text("↻", color = InkSoft, fontFamily = FontFamily.Monospace, fontSize = 18.sp)
-                }
-            }
-
-            Spacer(Modifier.weight(.3f))
-
-            PaintableFace(
-                size = size,
-                colors = colors,
-                palette = palette,
-                brush = brush,
-                locked = center,
-                onPaint = { index ->
-                    brush?.let(colorFaces::get)?.let { onSetColor(index, it) }
-                }
-            )
-
-            Spacer(Modifier.weight(.4f))
-
-            FacePalette(brush) { brush = it }
-
-            Spacer(Modifier.height(14.dp))
-
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(3.dp)
-            ) {
-                Text(
-                    "DONE",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = .8.sp
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AppButton("Scan again", onRescan, Modifier.weight(1f), primary = false)
+            AppButton("Solve cube", onAccept, Modifier.weight(1.2f), enabled = report?.ok == true)
         }
     }
-}
-
-@Composable
-private fun PaintableFace(
-    size: Int,
-    colors: List<Face>,
-    palette: Map<Face, RgbColor>,
-    brush: StickerGuess?,
-    locked: Int,
-    onPaint: (Int) -> Unit
-) {
-    val latestPaint by rememberUpdatedState(onPaint)
-    val enabled = brush != null
-
-    Column(
-        Modifier.fillMaxWidth(if (size == 3) .78f else .92f)
-            .aspectRatio(1f)
-            .background(MetalDark, RoundedCornerShape(7.dp))
-            .border(1.dp, MetalLight, RoundedCornerShape(7.dp))
-            .padding(if (size == 3) 5.dp else 3.dp)
-            .pointerInput(size, enabled) {
-                if (!enabled) return@pointerInput
-
-                fun cellAt(position: Offset): Int? {
-                    if (position.x !in 0f..this.size.width.toFloat() ||
-                        position.y !in 0f..this.size.height.toFloat()
-                    ) return null
-                    val col = (position.x / (this.size.width.toFloat() / size))
-                        .toInt().coerceIn(0, size - 1)
-                    val row = (position.y / (this.size.height.toFloat() / size))
-                        .toInt().coerceIn(0, size - 1)
-                    return row * size + col
+    editingFace?.let { face ->
+        var brush by remember(face) { mutableStateOf<StickerGuess?>(null) }
+        ModalBottomSheet(
+            onDismissRequest = { editingFace = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = AppBg, contentColor = Ink
+        ) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = CubeDesign.Gutter), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                ScreenHeader("${faceName(face)} face", "The center stays fixed") {
+                    AppIconButton(CubeIcon.Rotate, "Rotate face clockwise", { onRotate(face) })
                 }
-
-                awaitEachGesture {
-                    var last = -1
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    cellAt(down.position)?.takeIf { it != locked }?.let {
-                        last = it
-                        latestPaint(it)
-                    }
-                    do {
-                        val event = awaitPointerEvent()
-                        event.changes.forEach { change ->
-                            if (change.pressed) {
-                                val cell = cellAt(change.position)
-                                if (cell != null && cell != locked && cell != last) {
-                                    last = cell
-                                    latestPaint(cell)
-                                }
-                                change.consume()
-                            }
-                        }
-                    } while (event.changes.any { it.pressed })
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val colors = faces.getValue(face)
+                    StickerEditor(size, colors.map { faceColor(it, palette) }, colors.map { faceName(it) }, brush != null,
+                        { index -> brush?.let(colorFaces::get)?.let { onSetColor(face, index, it) } },
+                        Modifier.widthIn(max = 340.dp).fillMaxWidth(), locked = size * size / 2)
                 }
-            }
-    ) {
-        for (row in 0 until size) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                for (col in 0 until size) {
-                    val index = row * size + col
-                    Box(
-                        Modifier.weight(1f).fillMaxHeight().padding(1.5.dp)
-                            .background(
-                                faceColor(colors[index], palette),
-                                RoundedCornerShape(if (size == 3) 5.dp else 3.dp)
-                            )
-                            .border(
-                                if (index == locked) 1.5.dp else .6.dp,
-                                if (index == locked) Ink.copy(alpha = .65f)
-                                else Color.Black.copy(alpha = .3f),
-                                RoundedCornerShape(if (size == 3) 5.dp else 3.dp)
-                            )
-                    )
-                }
+                Eyebrow("Choose a color, then paint")
+                ColorPalette(brush) { brush = it }
+                AppButton("Done", { editingFace = null }, Modifier.fillMaxWidth(), icon = CubeIcon.Check)
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
 }
 
-@Composable
-private fun FacePalette(
-    selected: StickerGuess?,
-    onSelect: (StickerGuess) -> Unit
-) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        canonicalStickerGuesses.forEach { guess ->
-            val rgb = idealRgbForGuess(guess)
-            val color = Color(rgb.argb())
-            val active = selected == guess
-            Surface(
-                modifier = Modifier.weight(1f).height(46.dp),
-                onClick = { onSelect(guess) },
-                color = color,
-                shape = RoundedCornerShape(3.dp),
-                border = BorderStroke(
-                    if (active) 3.dp else 1.dp,
-                    if (active) Accent else Color.Black.copy(alpha = .32f)
-                )
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        guess.label,
-                        color = if (color.luminance() > .52f) Color.Black else Color.White,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 10.sp
-                    )
-                }
-            }
-        }
-    }
+internal fun faceName(face: Face) = when (face) {
+    Face.U -> "Top"; Face.D -> "Bottom"; Face.F -> "Front"
+    Face.B -> "Back"; Face.L -> "Left"; Face.R -> "Right"
 }
 
 @Composable
-private fun CubeNet(
-    size: Int,
-    faces: Map<Face, List<Face>>,
-    palette: Map<Face, RgbColor>,
-    onFace: (Face) -> Unit
-) {
+private fun CubeNet(n: Int, faces: Map<Face, List<Face>>, palette: Map<Face, RgbColor>, onFace: (Face) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val gap = 5.dp
-        val side = ((maxWidth - gap * 3) / 4).coerceAtMost(if (size == 3) 92.dp else 94.dp)
-
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                Spacer(Modifier.size(side))
-                NetFace(Face.U, side, size, faces, palette, onFace)
-                Spacer(Modifier.size(side))
-                Spacer(Modifier.size(side))
-            }
-            Spacer(Modifier.height(gap))
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                NetFace(Face.L, side, size, faces, palette, onFace)
-                NetFace(Face.F, side, size, faces, palette, onFace)
-                NetFace(Face.R, side, size, faces, palette, onFace)
-                NetFace(Face.B, side, size, faces, palette, onFace)
-            }
-            Spacer(Modifier.height(gap))
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                Spacer(Modifier.size(side))
-                NetFace(Face.D, side, size, faces, palette, onFace)
-                Spacer(Modifier.size(side))
-                Spacer(Modifier.size(side))
+        val gap = 6.dp
+        val side = (maxWidth - gap * 3) / 4
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap)) {
+            listOf(listOf(null, Face.U, null, null), listOf(Face.L, Face.F, Face.R, Face.B), listOf(null, Face.D, null, null)).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEach { face ->
+                        if (face == null) Spacer(Modifier.width(side).height(side + 22.dp))
+                        else NetFace(face, side, n, faces, palette, onFace)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun NetFace(
-    face: Face,
-    side: Dp,
-    size: Int,
-    faces: Map<Face, List<Face>>,
-    palette: Map<Face, RgbColor>,
-    onFace: (Face) -> Unit
-) {
-    Box(
-        Modifier.size(side)
-            .border(1.dp, Outline, RoundedCornerShape(4.dp))
-            .clickable { onFace(face) }
-            .padding(2.dp)
-    ) {
-        FaceGrid(
-            gridSize = size,
-            values = faces.getValue(face),
-            palette = palette,
-            modifier = Modifier.fillMaxSize(),
-            onTap = { onFace(face) }
-        )
+private fun NetFace(face: Face, side: Dp, n: Int, faces: Map<Face, List<Face>>, palette: Map<Face, RgbColor>, onFace: (Face) -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(side)) {
+        Surface(
+            onClick = { onFace(face) }, modifier = Modifier.size(side).semantics { contentDescription = "Edit ${faceName(face).lowercase()} face" },
+            color = MetalDark, shape = CubeDesign.SmallShape, border = BorderStroke(1.dp, Outline)
+        ) { FaceGrid(n, faces.getValue(face), palette, Modifier.padding(3.dp).fillMaxSize()) }
+        Text(face.symbol.toString(), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelSmall, color = InkSoft)
     }
 }

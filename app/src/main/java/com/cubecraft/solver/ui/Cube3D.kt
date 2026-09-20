@@ -42,7 +42,7 @@ fun Cube3D(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1050, easing = FastOutSlowInEasing),
+                animation = tween(CubeDesign.GuideMillis, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "guideProgress"
