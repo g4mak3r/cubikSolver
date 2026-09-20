@@ -64,8 +64,7 @@ jobs:
           script: |
             adb shell wm size 1080x2400
             adb shell wm density 480
-            gradle --no-daemon -Pemulator connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/com.cubecraft.solver/files/ui-captures ui-captures
+            bash scripts/check-design.sh
       - name: Upload screen captures and test results
         if: always()
         uses: actions/upload-artifact@v4

@@ -223,19 +223,26 @@ fun ScanSteps(index: Int, modifier: Modifier = Modifier) {
 
 @Composable
 fun ColorPalette(selected: StickerGuess?, onSelect: (StickerGuess) -> Unit) {
-    Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        canonicalStickerGuesses.forEach { guess ->
-            val color = Color(idealRgbForGuess(guess).argb())
-            val active = selected == guess
-            val ink = if (color.luminance() > .45f) Color.Black else Color.White
-            Surface(
-                Modifier.weight(1f).heightIn(min = 52.dp).semantics { contentDescription = "${guess.displayName.lowercase()} paint" }
-                    .selectable(active, role = Role.RadioButton, onClick = { onSelect(guess) }),
-                color = if (active) Ink else Panel2, shape = CubeDesign.SmallShape
-            ) {
-                Box(Modifier.padding(4.dp).clip(RoundedCornerShape(9.dp)).background(color), contentAlignment = Alignment.Center) {
-                    if (active) AppIcon(CubeIcon.Check, tint = ink)
-                    else Text(guess.label, color = ink, style = MaterialTheme.typography.labelMedium)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = if (maxWidth < 308.dp) 3 else 6
+        Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            canonicalStickerGuesses.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { guess ->
+                        val color = Color(idealRgbForGuess(guess).argb())
+                        val active = selected == guess
+                        val ink = if (color.luminance() > .45f) Color.Black else Color.White
+                        Surface(
+                            Modifier.weight(1f).heightIn(min = 52.dp).semantics { contentDescription = "${guess.displayName.lowercase()} paint" }
+                                .selectable(active, role = Role.RadioButton, onClick = { onSelect(guess) }),
+                            color = if (active) Ink else Panel2, shape = CubeDesign.SmallShape
+                        ) {
+                            Box(Modifier.padding(4.dp).clip(RoundedCornerShape(9.dp)).background(color), contentAlignment = Alignment.Center) {
+                                if (active) AppIcon(CubeIcon.Check, tint = ink)
+                                else Text(guess.label, color = ink, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
                 }
             }
         }

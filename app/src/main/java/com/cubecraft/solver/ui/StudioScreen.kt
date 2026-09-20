@@ -129,7 +129,7 @@ private fun SolutionPanel(solution: List<Move>, index: Int, onSeek: (Int) -> Uni
         Slider(
             value = scrub ?: index.toFloat(), onValueChange = { playing = false; scrub = it },
             onValueChangeFinished = { scrub?.let { onSeek(it.roundToInt()) }; scrub = null },
-            valueRange = 0f..total.toFloat(), modifier = Modifier.fillMaxWidth().height(32.dp).semantics { contentDescription = "Solution progress" },
+            valueRange = 0f..total.toFloat(), modifier = Modifier.fillMaxWidth().height(48.dp).semantics { contentDescription = "Solution progress" },
             colors = SliderDefaults.colors(inactiveTrackColor = Outline)
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

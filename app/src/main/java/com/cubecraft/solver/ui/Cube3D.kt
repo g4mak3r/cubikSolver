@@ -36,13 +36,18 @@ fun Cube3D(
     val hitPolys = remember { AtomicReference<List<StickerHit>>(emptyList()) }
     // Animate only a visible move guide; read the value in draw scope so frames do not
     // recompose the whole cube or keep an idle studio consuming frames.
-    val guideProgress = if (highlight != null) {
+    val guideProgress = if (highlight != null) key(highlight) {
         val transition = rememberInfiniteTransition(label = "guide")
         transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(CubeDesign.GuideMillis, easing = FastOutSlowInEasing),
+                animation = keyframes {
+                    durationMillis = 1900
+                    0f at 0 using FastOutSlowInEasing
+                    1f at CubeDesign.GuideMillis
+                    1f at 1900
+                },
                 repeatMode = RepeatMode.Restart
             ),
             label = "guideProgress"

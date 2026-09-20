@@ -147,8 +147,8 @@ internal fun ScannerLayout(
 ) {
     val center = latest?.stickers?.getOrNull(gridSize * gridSize / 2)
     val matched = expectedCenter != null && center?.guess == expectedCenter && center.confidence >= .36f
-    val guideHeight by animateDpAsState(if (index == 0 && !introSettled) 172.dp else 112.dp, tween(600, easing = FastOutSlowInEasing), label = "guideDock")
-    val cameraAlpha by animateFloatAsState(if (index == 0 && !introSettled) 0f else 1f, tween(CubeDesign.ScreenMillis), label = "cameraReveal")
+    val guideHeight by animateDpAsState(if (granted && index == 0 && !introSettled) 172.dp else 112.dp, tween(600, easing = FastOutSlowInEasing), label = "guideDock")
+    val cameraAlpha by animateFloatAsState(if (granted && index == 0 && !introSettled) 0f else 1f, tween(CubeDesign.ScreenMillis), label = "cameraReveal")
     Column(Modifier.fillMaxSize().padding(horizontal = CubeDesign.Gutter)) {
         ScreenHeader("Scan your cube", "Face ${index + 1} of 6 · $gridSize × $gridSize", onBack)
         ScanSteps(index, Modifier.padding(bottom = 16.dp))

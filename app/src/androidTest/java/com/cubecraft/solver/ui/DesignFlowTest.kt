@@ -36,12 +36,14 @@ class DesignFlowTest {
         ui.mainClock.advanceTimeBy(400)
     }
 
-    private fun capture(name: String) {
+    private fun capture(name: String, wholeWindow: Boolean = false) {
         ui.waitForIdle()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = File(context.getExternalFilesDir("ui-captures"), "$name.png")
         file.parentFile!!.mkdirs()
-        file.outputStream().use { ui.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val bitmap = if (wholeWindow) InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            else ui.onRoot().captureToImage().asAndroidBitmap()
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun homeSelectsFiveAndStartsScan() {
@@ -57,7 +59,7 @@ class DesignFlowTest {
     @Test fun scannerPermissionStateFitsLargeText() {
         var permission = false
         screen(largeText = true) {
-            ScannerLayout(5, scanSequence[4], 4, StickerGuess.WHITE, null, true, false, false, null, {}, {}, { permission = true }) {}
+            ScannerLayout(5, scanSequence[0], 0, null, null, false, false, false, null, {}, {}, { permission = true }) {}
         }
         ui.onNodeWithText("Capture face").assertIsNotEnabled().assertIsDisplayed()
         ui.onNodeWithText("Allow camera").performScrollTo().assertIsDisplayed()
@@ -95,6 +97,7 @@ class DesignFlowTest {
         ui.mainClock.advanceTimeBy(600)
         ui.onNodeWithContentDescription("Rotate face clockwise").performClick()
         assertEquals(1, rotations)
+        capture("04b-face-editor", wholeWindow = true)
         ui.onNodeWithText("Done").assertIsDisplayed().performClick()
     }
 
@@ -125,5 +128,11 @@ class DesignFlowTest {
         ui.onNodeWithContentDescription("Previous move").performClick()
         ui.mainClock.advanceTimeBy(300)
         assertEquals(0, index.intValue)
+        ui.onNodeWithText("Play").performClick()
+        ui.mainClock.advanceTimeBy(2000)
+        ui.runOnIdle { assertEquals(1, index.intValue) }
+        ui.onNodeWithText("Pause").performClick()
+        ui.mainClock.advanceTimeBy(4000)
+        ui.runOnIdle { assertEquals(1, index.intValue) }
     }
 }
