@@ -32,4 +32,6 @@ Its three small setup tables are built once and shared between solves.
 
 The app is designed to work offline at runtime.
 
+The shared visual, component and motion rules are documented in [DESIGN.md](DESIGN.md).
+
 Third-party attribution and license notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -60,6 +60,7 @@ jobs:
           api-level: 29
           arch: x86_64
           profile: pixel_2
+          emulator-boot-timeout: 180
           disable-animations: true
           script: |
             adb shell wm size 1080x2400
@@ -72,5 +73,6 @@ jobs:
           name: cubikSolver-design-checks
           path: |
             ui-captures
+            design-logcat.txt
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
