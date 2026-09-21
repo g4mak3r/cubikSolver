@@ -155,7 +155,7 @@ internal fun ScannerLayout(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             androidx.compose.material3.Surface(color = Panel, shape = CubeDesign.PanelShape) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ScanOrientationGuide(gridSize, index, pose, capturedFaces, Modifier.width(108.dp).height(guideHeight))
+                    ScanOrientationGuide(gridSize, index, pose, capturedFaces, Modifier.width(108.dp).height(guideHeight).padding(8.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(pose.title.lowercase().replaceFirstChar { it.uppercase() }, color = Ink, style = MaterialTheme.typography.titleSmall)
                         if (expectedCenter != null) {

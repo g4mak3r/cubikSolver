@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cubecraft.solver.model.CubeState
@@ -33,7 +34,7 @@ fun HomeScreen(onScan: (Int) -> Unit, onVirtual: (Int) -> Unit) {
             Eyebrow("A fresh perspective")
             Spacer(Modifier.height(12.dp))
             Text("Find your\nnext move.", style = MaterialTheme.typography.displaySmall, color = Ink, textAlign = TextAlign.Center)
-            Cube3D(cube, selected, defaultPalette, null, Modifier.fillMaxWidth().height(228.dp))
+            Cube3D(cube, selected, defaultPalette, null, Modifier.fillMaxWidth().height(228.dp).padding(vertical = 16.dp).clipToBounds())
             Text("Scan your cube. Follow each turn.\nSee everything fall into place.", style = MaterialTheme.typography.bodyMedium, color = InkSoft, textAlign = TextAlign.Center)
             Spacer(Modifier.height(20.dp))
         }
