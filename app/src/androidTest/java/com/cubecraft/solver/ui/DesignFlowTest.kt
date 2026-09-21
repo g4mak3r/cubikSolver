@@ -45,6 +45,12 @@ class DesignFlowTest {
         val bitmap = if (wholeWindow) InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
             else ui.onRoot().captureToImage().asAndroidBitmap()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // UTP uninstalls the target after a successful run. Preserve captures outside
+        // its external-files directory before that cleanup removes them.
+        val copy = "mkdir -p /data/local/tmp/cubik-ui-captures && cp ${file.absolutePath} /data/local/tmp/cubik-ui-captures/"
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(copy)
+        ).use { it.readBytes() }
     }
 
     @Test fun homeSelectsFiveAndStartsScan() {
