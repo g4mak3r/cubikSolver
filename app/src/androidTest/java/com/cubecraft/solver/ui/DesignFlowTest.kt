@@ -26,7 +26,8 @@ class DesignFlowTest {
         StickerGuess.GREEN to Face.F, StickerGuess.YELLOW to Face.D, StickerGuess.ORANGE to Face.L, StickerGuess.BLUE to Face.B)
 
     private fun screen(largeText: Boolean = false, content: @Composable () -> Unit) {
-        ui.mainClock.autoAdvance = false
+        // Scroll actions need recomposition while they seek the target.
+        ui.mainClock.autoAdvance = true
         ui.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, if (largeText) 1.3f else 1f)) {
@@ -128,6 +129,7 @@ class DesignFlowTest {
         ui.onNodeWithContentDescription("Previous move").performClick()
         ui.mainClock.advanceTimeBy(300)
         assertEquals(0, index.intValue)
+        ui.mainClock.autoAdvance = false
         ui.onNodeWithText("Play").performClick()
         ui.mainClock.advanceTimeBy(2000)
         ui.runOnIdle { assertEquals(1, index.intValue) }

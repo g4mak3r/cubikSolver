@@ -76,3 +76,22 @@ jobs:
             design-logcat.txt
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
+
+  publish:
+    needs: [build, design-checks]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cubikSolver-debug
+          path: release-apk
+      - name: Publish tested APK and clean old branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const publish = require('./.github/scripts/publish.cjs');
+            await publish({github, context, core});

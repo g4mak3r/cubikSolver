@@ -1,0 +1,67 @@
+[
+  {
+    "name": "5x5-edge-rescue-0103",
+    "sha": "6d36f3dc46f686fd9b764e4030b2ac8042d16068",
+    "archive": true
+  },
+  {
+    "name": "5x5-hard-deadline-0104",
+    "sha": "fc5bee7dc3fcd98bbec446886ab64954029f6033",
+    "archive": true
+  },
+  {
+    "name": "5x5-heuristic-split-0105",
+    "sha": "1b1fb780d69bf381b9959a293ea9d22b11401c98",
+    "archive": true
+  },
+  {
+    "name": "5x5-native-required-0108",
+    "sha": "38db6940c8ed34eeba836b479b3321e9d507ad9e",
+    "archive": false
+  },
+  {
+    "name": "5x5-orbit-heuristics-0102",
+    "sha": "55c1e3a00fe62af886ea5f0a841b81240be0d7f3",
+    "archive": true
+  },
+  {
+    "name": "5x5-regression-0104",
+    "sha": "f3eec3f75614730d9e69af083d5f5866c3b56260",
+    "archive": true
+  },
+  {
+    "name": "5x5-remove-native-tail-0106",
+    "sha": "f4732704c1ad2d582e4d5b2d64a9230682c532e8",
+    "archive": true
+  },
+  {
+    "name": "5x5-stable-score-0107",
+    "sha": "1e0c0592f1095becfafffc314f806181bb10f275",
+    "archive": true
+  },
+  {
+    "name": "cleanup-scan-guidance-091",
+    "sha": "0a502e8a165b48568a03b9bf3c78eacc741f0ac1",
+    "archive": true
+  },
+  {
+    "name": "design/unified-compose",
+    "sha": "e97af0812e46c017ce9dc77390c92086c9c58f9b",
+    "archive": false
+  },
+  {
+    "name": "fix/deterministic-5x5",
+    "sha": "f1587cb234719d2e12a74b5bb569b47fa1794166",
+    "archive": false
+  },
+  {
+    "name": "native-5x5-bestfirst-0101",
+    "sha": "453c76962c2dded00d07274aa274d5054d52a675",
+    "archive": true
+  },
+  {
+    "name": "native-5x5-search-010",
+    "sha": "476075056775e609e943d9040355beeaaca764ad",
+    "archive": true
+  }
+]

@@ -22,8 +22,8 @@ android {
         applicationId = "com.cubecraft.solver"
         minSdk = 29
         targetSdk = 35
-        versionCode = 38
-        versionName = "0.12.0"
+        versionCode = 39
+        versionName = "0.12.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         ndk {
